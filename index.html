@@ -101,7 +101,11 @@
             <p style="font-size: 13px; color: var(--text-color); margin-bottom: 20px;">The database is encrypted. Enter the Master Key to unscramble it into memory.</p>
             <input type="password" id="systemKeyInput" placeholder="Enter Decryption Key" style="text-align: center; margin-bottom: 15px; font-size: 18px; padding: 12px; width: 100%; border-color: var(--admin-red);" onkeypress="if(event.key === 'Enter') unlockSystem()">
             <button class="btn" style="background-color: var(--admin-red); width: 100%; padding: 12px; font-weight: bold;" onclick="unlockSystem()">DECRYPT SYSTEM</button>
-        </div>
+        <button class="btn" style="background-color: var(--admin-red); width: 100%; padding: 12px; font-weight: bold;" 
+            
+            <button class="btn" style="background-color: #ff8c00; width: 100%; margin-top: 15px; padding: 12px; font-weight: bold; color: black;" onclick="localStorage.clear(); alert('Tablet Memory Wiped! Please refresh the page.');">EMERGENCY TABLET RESET</button>
+		</div>
+		
     </div>
     <div id="crewLoginScreen" style="display: flex; justify-content: center; align-items: center; height: 100vh; width: 100%;">
         <div style="background: var(--panel-bg); padding: 40px; border-radius: 8px; border: 1px solid var(--input-border); text-align: center; width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
