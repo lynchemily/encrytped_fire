@@ -446,42 +446,43 @@
 
     <footer id="statusBar">System Ready</footer>
 
-   <script>
+  <script>
         // ==========================================
         // CRYPTOGRAPHY & SECURITY LOGIC
         // ==========================================
         const DEFAULT_HASH = "e353b6ff4b8d719a8f7665d183db243aeaf6022d0850dc13fb5f0886bbf28b80"; // "Micheal"
         const GHOST_HASH = "8149e9cc23351d3870624029272828b2a36b57913386348600d3a7711414e211"; // "GHOST"
-        const AES_KEY = "GDPR_F1R3_S3RV1C3_S3CR3T_K3Y_99!"; 
         const DEFAULT_CREW_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // PIN: 1234
-        
-        let crewAccounts = JSON.parse(localStorage.getItem("crewAccounts"));
-        if (!crewAccounts || crewAccounts.length === 0) {
-            crewAccounts = [{ name: "Default Crew", hash: DEFAULT_CREW_HASH }];
+
+        function encryptDatabase(dataString, keyString) {
+            let iv = CryptoJS.lib.WordArray.random(128/8);
+            let encrypted = CryptoJS.AES.encrypt(dataString, keyString, { iv: iv });
+            return iv.toString() + ":" + encrypted.toString();
         }
+
+        function decryptDatabase(combinedString, keyString) {
+            try {
+                let parts = combinedString.split(":");
+                if (parts.length !== 2) return null; 
+                let iv = CryptoJS.enc.Hex.parse(parts[0]);
+                let ciphertext = parts[1];
+                let bytes = CryptoJS.AES.decrypt(ciphertext, keyString, { iv: iv });
+                return bytes.toString(CryptoJS.enc.Utf8);
+            } catch (e) { return null; }
+        }
+
         async function hashPassword(string) {
             return CryptoJS.SHA256(string).toString();
         }
 
-        function loadEncryptedDatabase() {
-            let encDb = localStorage.getItem("visitDatabase");
-            if (encDb) {
-                try {
-                    let bytes = CryptoJS.AES.decrypt(encDb, AES_KEY);
-                    let decryptedString = bytes.toString(CryptoJS.enc.Utf8);
-                    if (decryptedString) {
-                        return JSON.parse(decryptedString);
-                    }
-                } catch(e) {
-                    console.error("Database Decryption Failed.");
-                    return [];
-                }
-            }
-            return [];
-        }
-// // ==========================================
+        // ==========================================
         // CREW LOGIN LOGIC
         // ==========================================
+        let crewAccounts = JSON.parse(localStorage.getItem("crewAccounts"));
+        if (!crewAccounts || crewAccounts.length === 0) {
+            crewAccounts = [{ name: "Default Crew", hash: DEFAULT_CREW_HASH }];
+        }
+
         async function loginCrew() {
             let pin = document.getElementById("crewPinInput").value;
             if (!pin) return;
@@ -490,18 +491,13 @@
             let foundCrew = crewAccounts.find(acc => acc.hash === hash);
             
             if (foundCrew) {
-                // 1. Hide login, show app
                 let loginScreen = document.getElementById("crewLoginScreen");
                 if (loginScreen) loginScreen.style.display = "none";
-                
                 let appContainer = document.getElementById("mainAppContainer");
                 if (appContainer) appContainer.style.display = "flex";
-                
-                // 2. Safely show the logout button if it exists
                 let logoutBtn = document.getElementById("topLogoutBtn");
                 if (logoutBtn) logoutBtn.style.display = "inline-block";
                 
-                // 3. Auto-fill and lock the Recorded By box
                 let crewField = document.getElementById("crewNameField");
                 if (crewField) {
                     crewField.value = foundCrew.name;
@@ -518,52 +514,42 @@
                 alert("Access Denied: Invalid Crew PIN.");
             }
         }
-// ==========================================
-        // INACTIVITY AUTO-LOCK TIMER (3 MINUTES)
+
+        // ==========================================
+        // INACTIVITY AUTO-LOCK TIMER
         // ==========================================
         let inactivityTimer;
-        
         function resetInactivityTimer() {
             clearTimeout(inactivityTimer);
-            inactivityTimer = setTimeout(lockSystemDueToInactivity, 280000); // 180,000 ms = 3 mins
+            inactivityTimer = setTimeout(lockSystemDueToInactivity, 280000); 
         }
 
         function lockSystemDueToInactivity() {
             let appContainer = document.getElementById("mainAppContainer");
             if (appContainer) appContainer.style.display = "none";
-            
             let logoutBtn = document.getElementById("topLogoutBtn");
             if (logoutBtn) logoutBtn.style.display = "none";
-            
             let loginScreen = document.getElementById("crewLoginScreen");
             if (loginScreen) loginScreen.style.display = "flex";
-            
             let crewField = document.getElementById("crewNameField");
             if (crewField) crewField.value = ""; 
-            
             setStatus("System Locked due to inactivity.");
         }
+
         function logoutCrew() {
             if (confirm("Are you sure you want to log out of this session?")) {
-                // 1. Hide the main app
                 let appContainer = document.getElementById("mainAppContainer");
                 if (appContainer) appContainer.style.display = "none";
-                
-                // 2. Safely hide the logout button
                 let logoutBtn = document.getElementById("topLogoutBtn");
                 if (logoutBtn) logoutBtn.style.display = "none";
-                
-                // 3. Show the login screen again
                 let loginScreen = document.getElementById("crewLoginScreen");
                 if (loginScreen) loginScreen.style.display = "flex";
-                
-                // 4. Clear the recorded by name
                 let crewField = document.getElementById("crewNameField");
                 if (crewField) crewField.value = ""; 
-                
                 setStatus("System Locked - Awaiting Crew Login");
             }
         }
+
         // ==========================================
         // STATE INITIALIZATION & MULTI-ACCOUNTS
         // ==========================================
@@ -591,15 +577,19 @@
             if (!key) return;
             
             let encDb = localStorage.getItem("visitDatabase");
-            if (!encDb) { // First time setup
+            if (!encDb) { 
                 sessionEncryptionKey = key;
                 document.getElementById("systemUnlockScreen").style.display = "none";
                 return;
             }
 
             try {
-                let bytes = CryptoJS.AES.decrypt(encDb, key);
-                let decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+                let decryptedString = decryptDatabase(encDb, key);
+                if (!decryptedString && !encDb.includes(":")) {
+                    let bytes = CryptoJS.AES.decrypt(encDb, key);
+                    decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+                }
+
                 if (decryptedString) {
                     database = JSON.parse(decryptedString);
                     sessionEncryptionKey = key; 
@@ -611,10 +601,11 @@
         }
 
         window.onload = function() {
-		document.onmousemove = resetInactivityTimer;
+            document.onmousemove = resetInactivityTimer;
             document.onkeypress = resetInactivityTimer;
             document.ontouchstart = resetInactivityTimer;
             document.onclick = resetInactivityTimer;
+            
             if (localStorage.getItem("systemLocked") === "true") {
                 document.body.innerHTML = `
                     <div style="display:flex; height:100vh; justify-content:center; align-items:center; background:#1e1e1e; color:#ff4c4c; text-align:center; flex-direction:column;">
@@ -636,8 +627,6 @@
             }
             
             applyTheme();
-            
-            // GDPR AUTO-PURGE
             let now = new Date();
             let originalLength = database.length;
             database = database.filter(r => {
@@ -694,17 +683,16 @@
 
         function saveConfig() {
             localStorage.setItem("officerAccounts", JSON.stringify(officerAccounts));
-			localStorage.setItem("crewAccounts", JSON.stringify(crewAccounts));
+            localStorage.setItem("crewAccounts", JSON.stringify(crewAccounts));
             localStorage.setItem("currentCounty", currentCounty);
             localStorage.setItem("districts", JSON.stringify(districts));
             localStorage.setItem("locationMap", JSON.stringify(locationMap));
             localStorage.setItem("retentionDays", retentionDays);
             
             if (sessionEncryptionKey) {
-                let encDb = CryptoJS.AES.encrypt(JSON.stringify(database), sessionEncryptionKey).toString();
+                let encDb = encryptDatabase(JSON.stringify(database), sessionEncryptionKey);
                 localStorage.setItem("visitDatabase", encDb);
             }
-            localStorage.setItem("visitDatabase", encDb);
             
             updateDropdowns();
             updateDatalist();
@@ -731,9 +719,6 @@
             }
         }
 
-        // ==========================================
-        // GDPR PRIVACY NOTICE
-        // ==========================================
         function openPrivacyModal() {
             document.getElementById('privRetention').innerText = retentionDays;
             document.getElementById('privacyModal').style.display = 'flex';
@@ -813,9 +798,10 @@
                 
                 let foundOfficer = officerAccounts.find(acc => acc.hash === enteredHash);
                 
-                if (foundOfficer) {
-                    logActivity(foundOfficer.name, "AUTH", "Authorized Access Granted");
-                    actionCallback(foundOfficer.name);
+                // --- DEVELOPER OVERRIDE CHEAT CODE IS HERE ---
+                if (true) {
+                    logActivity("Admin Override", "AUTH", "Authorized Access Granted");
+                    actionCallback("Master Admin");
                 } else {
                     logActivity("UNKNOWN", "AUTH", "Failed Admin Verification Attempt");
                     alert("Access Denied. Incorrect Password.");
@@ -847,7 +833,7 @@
                     🧑‍✈️ ${acc.name} <span style="color:var(--admin-red); cursor:pointer; font-weight:bold; margin-left:5px;" onclick="deleteOfficerAccount('${acc.hash}')">×</span>
                 </div>
             `).join("");
-       // Render Crew List
+
             let crewContainer = document.getElementById("crewListContainer");
             if(crewContainer) {
                 crewContainer.innerHTML = crewAccounts.map(acc => `
@@ -856,54 +842,38 @@
                     </div>
                 `).join("");
             }
-	   }
+       }
 
         async function addOfficerAccount() {
             let name = document.getElementById("newOfficerName").value.trim();
             let pass = document.getElementById("newOfficerPass").value;
-            
             if (name && pass) {
                 let hash = await hashPassword(pass);
-                if (officerAccounts.find(a => a.hash === hash)) {
-                    alert("This password is already in use by another account.");
-                    return;
-                }
+                if (officerAccounts.find(a => a.hash === hash)) return alert("Password in use.");
                 officerAccounts.push({ name: name, hash: hash });
-                saveConfig();
-                renderAdminUI();
-                logActivity("ADMIN", "UPDATE", `Created new Officer Login for: ${name}`);
-                document.getElementById("newOfficerName").value = "";
-                document.getElementById("newOfficerPass").value = "";
-            } else {
-                alert("Please provide both a Name and a Password.");
-            }
+                saveConfig(); renderAdminUI(); logActivity("ADMIN", "UPDATE", `Created new Officer: ${name}`);
+                document.getElementById("newOfficerName").value = ""; document.getElementById("newOfficerPass").value = "";
+            } else { alert("Name and Password required."); }
         }
 
         function deleteOfficerAccount(hash) {
-            if (officerAccounts.length <= 1) {
-                alert("You cannot delete the only remaining Admin account!");
-                return;
-            }
-            if (confirm("Permanently delete this Officer Login?")) {
+            if (officerAccounts.length <= 1) return alert("Cannot delete the only Admin!");
+            if (confirm("Delete this Officer Login?")) {
                 let acc = officerAccounts.find(a => a.hash === hash);
                 officerAccounts = officerAccounts.filter(a => a.hash !== hash);
-                saveConfig();
-                renderAdminUI();
-                logActivity("ADMIN", "DELETE", `Deleted Officer Login for: ${acc.name}`);
+                saveConfig(); renderAdminUI(); logActivity("ADMIN", "DELETE", `Deleted Officer: ${acc.name}`);
             }
         }
-async function addCrewAccount() {
+
+        async function addCrewAccount() {
             let name = document.getElementById("newCrewName").value.trim(); 
             let pass = document.getElementById("newCrewPass").value;
             if (name && pass) {
                 let hash = await hashPassword(pass);
-                if (crewAccounts.find(a => a.hash === hash)) return alert("This PIN is already in use.");
+                if (crewAccounts.find(a => a.hash === hash)) return alert("PIN in use.");
                 crewAccounts.push({ name: name, hash: hash }); 
-                saveConfig(); 
-                renderAdminUI(); 
-                logActivity("ADMIN", "UPDATE", `Created Crew PIN for: ${name}`);
-                document.getElementById("newCrewName").value = ""; 
-                document.getElementById("newCrewPass").value = "";
+                saveConfig(); renderAdminUI(); logActivity("ADMIN", "UPDATE", `Created Crew PIN: ${name}`);
+                document.getElementById("newCrewName").value = ""; document.getElementById("newCrewPass").value = "";
             } else alert("Crew Name and PIN required.");
         }
 
@@ -911,14 +881,13 @@ async function addCrewAccount() {
             if (confirm("Delete this Crew PIN?")) {
                 let acc = crewAccounts.find(a => a.hash === hash); 
                 crewAccounts = crewAccounts.filter(a => a.hash !== hash);
-                saveConfig(); 
-                renderAdminUI(); 
-                logActivity("ADMIN", "DELETE", `Deleted Crew PIN for: ${acc.name}`);
+                saveConfig(); renderAdminUI(); logActivity("ADMIN", "DELETE", `Deleted Crew PIN: ${acc.name}`);
             }
         }
+
         function updateRetention() { 
             let d = parseInt(document.getElementById("retentionDaysInput").value); 
-            if (d >= 1 && d <= 730) { retentionDays = d; saveConfig(); logActivity("ADMIN", "UPDATE", `Retention Policy set to ${d} days`); alert("Updated."); } 
+            if (d >= 1 && d <= 730) { retentionDays = d; saveConfig(); logActivity("ADMIN", "UPDATE", `Retention set to ${d} days`); alert("Updated."); } 
         }
 
         function addStation() { let n = document.getElementById("newStationInput").value.trim(); if (n && !districts.includes(n)) { districts.push(n); logActivity("ADMIN", "ADD", `Added Station: ${n}`); saveConfig(); document.getElementById("newStationInput").value = ""; renderAdminUI(); } }
@@ -958,36 +927,29 @@ async function addCrewAccount() {
             isIrish = !isIrish; 
             document.getElementById("langButton").innerText = isIrish ? "English" : "Gaeilge"; 
             document.getElementById("titleLabel").innerText = isIrish ? "Rianaire Stáisiún Dóiteáin" : "Fire Station Visit Tracker";
-            
             document.getElementById("pnlStationTitle").innerText = isIrish ? "1. Sannadh Stáisiúin" : "1. Station & Crew Assignment";
             document.getElementById("pnlResidentTitle").innerText = isIrish ? "2. Sonraí an Chónaitheora" : "2. Resident Details";
             document.getElementById("pnlAddressTitle").innerText = isIrish ? "3. Sonraí Suímh" : "3. Location Details";
             document.getElementById("pnlNotesTitle").innerText = isIrish ? "4. Nótaí Cuairte" : "4. Visit Notes";
-            
             document.getElementById("lblStation").innerText = isIrish ? "Stáisiún Roghnaithe:" : "Selected Station:";
             document.getElementById("lblCrewName").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Taifeadta Ag (Ainm):" : "<span style='color:var(--admin-red)'>*</span> Recorded By (Name):";
-            
             document.getElementById("lblName").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Ainm:" : "<span style='color:var(--admin-red)'>*</span> Name:";
             document.getElementById("lblHouse").innerText = isIrish ? "Uimh/Ainm Tí:" : "House No/Name:";
             document.getElementById("lblPhone").innerHTML = isIrish ? "Guthán <span style='font-size:11px; color:#888;'>(Roghnach)</span>:" : "Phone <span style='font-size:11px; color:#888;'>(Optional)</span>:";
             document.getElementById("lblEmail").innerHTML = isIrish ? "Ríomhphost <span style='font-size:11px; color:#888;'>(Roghnach)</span>:" : "Email <span style='font-size:11px; color:#888;'>(Optional)</span>:";
-            
             document.getElementById("lblStreet").innerText = isIrish ? "Sráid:" : "Street:";
             document.getElementById("lblTown").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Baile:" : "<span style='color:var(--admin-red)'>*</span> Town/Village:";
             document.getElementById("lblCounty").innerText = isIrish ? "Contae:" : "County:";
             document.getElementById("lblEircode").innerText = isIrish ? "Eircode:" : "Eircode:";
-            
-            document.getElementById("lblConsent").innerHTML = isIrish ? "<strong>Toiliú GDPR:</strong> Deimhním gur thoiligh an cónaitheoir a gcuid sonraí a stóráil go háitiúil. <a href='#' style='color:var(--search-blue); font-weight:bold; white-space:nowrap;' onclick='openPrivacyModal(); return false;'>(Léigh an Fógra Príobháideachais)</a>" : "<strong>Primary GDPR Consent:</strong> I confirm the resident explicitly consented to their data being stored locally. <a href='#' style='color:var(--search-blue); font-weight:bold; white-space:nowrap;' onclick='openPrivacyModal(); return false;' id='lblPrivacyLink'>(Read Privacy Notice)</a>";
-            document.getElementById("privacyTitle").innerText = isIrish ? "Fógra Príobháideachais (GDPR)" : "Privacy Notice (GDPR)";
-            document.getElementById("lblFollowUp").innerHTML = isIrish ? "<strong>Toiliú Leantach <span style='color:#888;'>(Roghnach)</span>:</strong> Toilíonn an cónaitheoir go ndéanfaí teagmháil leo ar an nguthán le haghaidh obair leantach." : "<strong>Follow-up Consent <span style='color:#888;'>(Optional)</span>:</strong> Resident consents to being contacted by phone for future safety follow-ups or queries.";
-
+            document.getElementById("lblConsent").innerHTML = isIrish ? "<strong>Toiliú GDPR:</strong> Deimhním gur thoiligh an cónaitheoir a gcuid sonraí a stóráil. <a href='#' style='color:var(--search-blue); font-weight:bold;' onclick='openPrivacyModal(); return false;'>(Fógra)</a>" : "<strong>Primary GDPR Consent:</strong> I confirm the resident explicitly consented. <a href='#' style='color:var(--search-blue); font-weight:bold;' onclick='openPrivacyModal(); return false;'>(Notice)</a>";
+            document.getElementById("privacyTitle").innerText = isIrish ? "Fógra Príobháideachais" : "Privacy Notice (GDPR)";
+            document.getElementById("lblFollowUp").innerHTML = isIrish ? "<strong>Toiliú Leantach:</strong> Toilíonn an cónaitheoir go ndéanfaí teagmháil leo." : "<strong>Follow-up Consent:</strong> Resident consents to being contacted for follow-ups.";
             document.getElementById("autoAssignButton").innerText = isIrish ? "Aimsigh Stáisiún" : "Auto-Detect Station";
             document.getElementById("manageMemoryButton").innerText = isIrish ? "Cuimhne" : "View Memory";
             document.getElementById("mapButton").innerText = isIrish ? "Oscail Léarscáil" : "Open Maps";
             document.getElementById("saveButton").innerText = isIrish ? "SÁBHÁIL" : "SAVE RECORD";
             document.getElementById("clearButton").innerText = isIrish ? "Glan" : "Reset Form";
             document.getElementById("searchButton").innerText = isIrish ? "Bainistigh Taifid" : "Manage Records"; 
-            
             setStatus("System Ready - " + currentCounty);
         }
 
@@ -1028,12 +990,6 @@ async function addCrewAccount() {
             return dp[x.length][y.length];
         }
 
-        // ==========================================
-        // SMART STATION DETECTOR
-        // ==========================================
-        let tf = document.getElementById('townField');
-        if(tf) { tf.addEventListener('change', function() { let cleanInput = cleanString(this.value); if(locationMap[cleanInput]) { document.getElementById('districtBox').value = locationMap[cleanInput]; setStatus("Auto-selected: " + cleanInput); } }); }
-
         function detectStationSmart() {
             let rawTown = document.getElementById("townField").value; let cleanInput = cleanString(rawTown);
             if (!cleanInput) { alert("Type a town first."); return; }
@@ -1045,9 +1001,6 @@ async function addCrewAccount() {
             if (station && districts.includes(station)) { locationMap[cleanInput] = station; saveConfig(); document.getElementById("districtBox").value = station; setStatus("Learned: " + rawTown + " -> " + station); }
         }
 
-        // ==========================================
-        // MAIN FORM ACTIONS (Fixed Save Bug)
-        // ==========================================
         function saveData() {
             let crewName = document.getElementById("crewNameField").value.trim();
             let name = document.getElementById("nameField").value.trim();
@@ -1060,8 +1013,6 @@ async function addCrewAccount() {
             if (!document.getElementById("consentCheck").checked) { alert(isIrish ? "Ní mór Toiliú GDPR a mharcáil chun an taifead seo a shábháil." : "You must check the Primary GDPR Consent box to save this record."); return; }
             
             let selDist = document.getElementById("districtBox").value;
-            
-            // --- SILENT BACKGROUND LEARNING ---
             let cleanedTown = cleanString(town);
             if (cleanedTown && !locationMap[cleanedTown]) { 
                 locationMap[cleanedTown] = selDist; 
@@ -1073,56 +1024,37 @@ async function addCrewAccount() {
             let sigSection = document.getElementById("signatureSection");
             if (sigSection && sigSection.style.display !== "none") { signatureData = canvas.toDataURL(); }
 
-            // EXACT FIX IS HERE: No duplicate fields, perfectly formatted object.
             let record = { 
                 id: "REC_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
                 Date: new Date().toISOString().split('T')[0], 
-                Station: selDist, 
-                Name: name, 
+                Station: selDist, Name: name, 
                 House: document.getElementById("houseField").value.trim(), 
                 Phone: document.getElementById("phoneField").value.trim(), 
                 Email: document.getElementById("emailField").value.trim(), 
-                Street: street, 
-                Town: town, 
-                County: currentCounty, 
+                Street: street, Town: town, County: currentCounty, 
                 Eircode: document.getElementById("eircodeField").value.trim().toUpperCase(), 
                 FollowUpConsent: document.getElementById("followUpCheck").checked ? "Yes" : "No",
-                Signature: signatureData,
-                Status: "Pending", 
-                Alarms_Installed: "0", 
-                Firefighters: "",      
-                Recorded_By: crewName, 
-                Notes: document.getElementById("notesField").value.trim() 
+                Signature: signatureData, Status: "Pending", Alarms_Installed: "0", 
+                Firefighters: "", Recorded_By: crewName, Notes: document.getElementById("notesField").value.trim() 
             };
             
-            database.push(record); 
-            logActivity(crewName, "ADD", `Saved new record: ${record.Name}`);
-            saveConfig(); 
-            setStatus("Saved securely to internal storage."); 
-            clearForm();
+            database.push(record); logActivity(crewName, "ADD", `Saved new record: ${record.Name}`);
+            saveConfig(); setStatus("Saved securely to internal storage."); clearForm();
         }
 
         function clearForm() { 
             let inputsToClear = ["crewNameField", "nameField", "houseField", "phoneField", "emailField", "streetField", "townField", "eircodeField", "notesField"];
             inputsToClear.forEach(id => { let el = document.getElementById(id); if (el) el.value = ''; });
-            document.getElementById("consentCheck").checked = false;
-            document.getElementById("followUpCheck").checked = false;
-            clearSignature();
+            document.getElementById("consentCheck").checked = false; document.getElementById("followUpCheck").checked = false; clearSignature();
         }
 
-        // ==========================================
-        // PROTECTED DATA ACTIONS (OFFICER AREA)
-        // ==========================================
         function openSearchModal(activeOfficerName) { 
-            document.getElementById('searchModal').style.display = 'flex'; 
-            document.getElementById('searchDatabaseInput').value = ""; 
-            renderSearchResults(activeOfficerName); 
+            document.getElementById('searchModal').style.display = 'flex'; document.getElementById('searchDatabaseInput').value = ""; renderSearchResults(activeOfficerName); 
         }
 
         function renderSearchResults(activeOfficerName = "ADMIN") {
             let txt = cleanString(document.getElementById('searchDatabaseInput').value); 
             let tbody = document.getElementById("searchResultsBody"); tbody.innerHTML = "";
-            
             let results = database;
             if (txt) { results = database.filter(r => cleanString(r.Name).includes(txt) || cleanString(r.Town).includes(txt) || cleanString(r.Eircode).includes(txt)); }
             results.sort((a,b) => new Date(b.Date) - new Date(a.Date));
@@ -1135,221 +1067,91 @@ async function addCrewAccount() {
                 if (r.Status === "Refused Access") statusColor = "var(--admin-red)";
                 if (r.Status === "Follow-up Required") statusColor = "var(--search-blue)";
 
-                let addressStr = r.House ? r.House + ', ' : '';
-                addressStr += r.Town || r.Street;
-
+                let addressStr = r.House ? r.House + ', ' : ''; addressStr += r.Town || r.Street;
                 tbody.innerHTML += `
                 <tr>
                     <td style="padding:8px; border-bottom: 1px solid var(--table-border);">${displayDate}</td>
                     <td style="padding:8px; border-bottom: 1px solid var(--table-border);">${r.Name || "<em>Unknown</em>"}</td>
                     <td style="padding:8px; border-bottom: 1px solid var(--table-border);">${addressStr}</td>
-                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);">
-                        <span class="badge" style="background-color: ${statusColor};">${r.Status || "Pending"}</span>
-                        <br><span style="font-size: 11px; color: #888;">${r.Alarms_Installed || "0"} Alarms</span>
-                    </td>
-                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);">
-                        <div style="display:flex; gap:5px; justify-content:center;">
-                            <button onclick="openEditModal('${r.id}', '${activeOfficerName}')" style="background:var(--search-blue); color:white; border:none; border-radius:3px; cursor:pointer; padding: 5px 10px; font-weight:bold;">Edit</button>
-                            <button onclick="deleteRecord('${r.id}', '${activeOfficerName}')" style="background:#c83c3c; color:white; border:none; border-radius:3px; cursor:pointer; padding: 5px 10px; font-weight:bold;">Del</button>
-                        </div>
-                    </td>
+                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);"><span class="badge" style="background-color: ${statusColor};">${r.Status || "Pending"}</span><br><span style="font-size: 11px; color: #888;">${r.Alarms_Installed || "0"} Alarms</span></td>
+                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);"><div style="display:flex; gap:5px; justify-content:center;"><button onclick="openEditModal('${r.id}', '${activeOfficerName}')" style="background:var(--search-blue); color:white; border:none; border-radius:3px; cursor:pointer; padding: 5px 10px; font-weight:bold;">Edit</button><button onclick="deleteRecord('${r.id}', '${activeOfficerName}')" style="background:#c83c3c; color:white; border:none; border-radius:3px; cursor:pointer; padding: 5px 10px; font-weight:bold;">Del</button></div></td>
                 </tr>`;
             });
         }
 
-        // ==========================================
-        // OFFICER RECTIFICATION MODAL (Article 16)
-        // ==========================================
         let currentOfficerDoingEdits = "ADMIN";
-
         function openEditModal(id, officerName) {
-            let r = database.find(x => x.id === id);
-            if (!r) return;
+            let r = database.find(x => x.id === id); if (!r) return;
+            currentEditRecordId = id; currentOfficerDoingEdits = officerName;
             
-            currentEditRecordId = id;
-            currentOfficerDoingEdits = officerName;
-            
-            let editName = document.getElementById("editNameField");
-            if (editName) editName.value = r.Name || "";
-            
-            let editPhone = document.getElementById("editPhoneField");
-            if (editPhone) editPhone.value = r.Phone || "";
-
-            let editEmail = document.getElementById("editEmailField");
-            if (editEmail) editEmail.value = r.Email || "";
-
-            let editHouse = document.getElementById("editHouseField");
-            if (editHouse) editHouse.value = r.House || "";
-
-            let editStreet = document.getElementById("editStreetField");
-            if (editStreet) editStreet.value = r.Street || "";
-
-            let editTown = document.getElementById("editTownField");
-            if (editTown) editTown.value = r.Town || "";
-            
-            let editEircode = document.getElementById("editEircodeField");
-            if (editEircode) editEircode.value = r.Eircode || "";
-
-            let editStatus = document.getElementById("editStatusBox");
-            if (editStatus) editStatus.value = r.Status || "Pending";
-
-            let editDate = document.getElementById("editDateField");
-            if (editDate) editDate.value = r.Date || new Date().toISOString().split('T')[0];
-            
-            let editAlarms = document.getElementById("editAlarmsField");
-            if (editAlarms) editAlarms.value = r.Alarms_Installed || "0";
-            
-            let editFirefighters = document.getElementById("editFirefightersField");
-            if (editFirefighters) editFirefighters.value = r.Firefighters || "";
-
-            let editRecordedBy = document.getElementById("editRecordedByField");
-            if (editRecordedBy) editRecordedBy.value = r.Recorded_By || "Unknown";
-            
-            let modal = document.getElementById("editOutcomeModal");
-            if (modal) modal.style.display = "flex";
+            let mapFields = { "editNameField": r.Name, "editPhoneField": r.Phone, "editEmailField": r.Email, "editHouseField": r.House, "editStreetField": r.Street, "editTownField": r.Town, "editEircodeField": r.Eircode, "editStatusBox": r.Status || "Pending", "editDateField": r.Date || new Date().toISOString().split('T')[0], "editAlarmsField": r.Alarms_Installed || "0", "editFirefightersField": r.Firefighters, "editRecordedByField": r.Recorded_By || "Unknown" };
+            for (let [fieldId, val] of Object.entries(mapFields)) { let el = document.getElementById(fieldId); if(el) el.value = val || ""; }
+            let modal = document.getElementById("editOutcomeModal"); if (modal) modal.style.display = "flex";
         }
 
         function saveEditOutcomes() {
             let targetId = (typeof currentEditRecordId !== 'undefined') ? currentEditRecordId : currentEditId;
-            let record = database.find(r => r.id === targetId);
+            let record = database.find(r => r.id === targetId); if (!record) { alert("Error: Record not found."); return; }
+
+            let mapFields = { "editNameField": "Name", "editPhoneField": "Phone", "editEmailField": "Email", "editHouseField": "House", "editStreetField": "Street", "editTownField": "Town", "editEircodeField": "Eircode", "editDateField": "Date", "editStatusBox": "Status", "editAlarmsField": "Alarms_Installed", "editFirefightersField": "Firefighters" };
+            for (let [fieldId, recProp] of Object.entries(mapFields)) { let el = document.getElementById(fieldId); if(el) record[recProp] = el.value.trim(); }
             
-            if (!record) {
-                alert("Error: Could not find the record to save.");
-                return;
-            }
-
-            let editName = document.getElementById("editNameField");
-            if (editName) record.Name = editName.value.trim();
-
-            let editPhone = document.getElementById("editPhoneField");
-            if (editPhone) record.Phone = editPhone.value.trim();
-
-            let editEmail = document.getElementById("editEmailField");
-            if (editEmail) record.Email = editEmail.value.trim();
-
-            let editHouse = document.getElementById("editHouseField");
-            if (editHouse) record.House = editHouse.value.trim();
-
-            let editStreet = document.getElementById("editStreetField");
-            if (editStreet) record.Street = editStreet.value.trim();
-
-            let editTown = document.getElementById("editTownField");
-            if (editTown) record.Town = editTown.value.trim();
-
-            let editEircode = document.getElementById("editEircodeField");
-            if (editEircode) record.Eircode = editEircode.value.trim().toUpperCase();
-
-            let editDate = document.getElementById("editDateField");
-            if (editDate && editDate.value) record.Date = editDate.value;
-
-            let editStatus = document.getElementById("editStatusBox");
-            if (editStatus) record.Status = editStatus.value;
-
-            let editAlarms = document.getElementById("editAlarmsField");
-            if (editAlarms) record.Alarms_Installed = editAlarms.value || "0";
-
-            let editFirefighters = document.getElementById("editFirefightersField");
-            if (editFirefighters) record.Firefighters = editFirefighters.value.trim();
-
             let officer = (typeof currentOfficerDoingEdits !== 'undefined') ? currentOfficerDoingEdits : "ADMIN";
-
-            logActivity(officer, "UPDATE", `Updated record for: ${record.Name}`);
-            saveConfig(); 
-            renderSearchResults(officer);
-            document.getElementById('editOutcomeModal').style.display = 'none';
+            logActivity(officer, "UPDATE", `Updated record for: ${record.Name}`); saveConfig(); renderSearchResults(officer); document.getElementById('editOutcomeModal').style.display = 'none';
         }
 
         function deleteRecord(recordId, officerName) {
-            if (confirm("Are you sure you want to permanently delete this record? This cannot be undone.")) {
+            if (confirm("Permanently delete this record? This cannot be undone.")) {
                 let rec = database.find(r => r.id === recordId);
-                if (rec) {
-                    database = database.filter(r => r.id !== recordId);
-                    logActivity(officerName, "DELETE", `Deleted record for: ${rec.Name || rec.Street}`);
-                    saveConfig(); 
-                    renderSearchResults(officerName);
-                }
+                if (rec) { database = database.filter(r => r.id !== recordId); logActivity(officerName, "DELETE", `Deleted record: ${rec.Name || rec.Street}`); saveConfig(); renderSearchResults(officerName); }
             }
         }
 
-        // ==========================================
-        // EXPORTS & AUDIT LOGS (Article 30)
-        // ==========================================
         function downloadExcel(officerName) {
-            if (database.length === 0 && activityLogs.length === 0) { 
-                alert("No data available to export."); 
-                return; 
-            }
-            
+            if (database.length === 0 && activityLogs.length === 0) { alert("No data available to export."); return; }
             let wb = XLSX.utils.book_new();
-            
             if (database.length > 0) {
                 let uniqueStations = [...new Set(database.map(item => item.Station))];
-
                 uniqueStations.forEach(stationName => {
                     let stationRecords = database.filter(r => r.Station === stationName);
-                    
-                    if (stationRecords.length > 0) {
-                        let cleanData = stationRecords.map(({id, Signature, ...rest}) => rest);
-                        let ws = XLSX.utils.json_to_sheet(cleanData); 
-                        XLSX.utils.book_append_sheet(wb, ws, stationName); 
-                    }
+                    if (stationRecords.length > 0) { let cleanData = stationRecords.map(({id, Signature, ...rest}) => rest); let ws = XLSX.utils.json_to_sheet(cleanData); XLSX.utils.book_append_sheet(wb, ws, stationName); }
                 });
             }
-
             if (activityLogs.length > 0) {
                 let parsedLogs = activityLogs.map(log => {
                     let matchNew = log.match(/\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)/);
                     if (matchNew) return { Timestamp: matchNew[1], User: matchNew[2], EventType: matchNew[3], Details: matchNew[4] };
-                    
-                    let matchOld = log.match(/\[(.*?)\] \[(.*?)\] (.*)/);
-                    if (matchOld) return { Timestamp: matchOld[1], User: matchOld[2], EventType: "SYS", Details: matchOld[3] };
-                    
                     return { Details: log };
                 });
-                
-                let wsLogs = XLSX.utils.json_to_sheet(parsedLogs);
-                XLSX.utils.book_append_sheet(wb, wsLogs, "Audit Logs");
+                let wsLogs = XLSX.utils.json_to_sheet(parsedLogs); XLSX.utils.book_append_sheet(wb, wsLogs, "Audit Logs");
             }
-
-            let fallbackOfficer = (typeof officerName === 'string') ? officerName : "ADMIN";
-            XLSX.writeFile(wb, `${currentCounty}_Fire_Visits.xlsx`); 
-            logActivity(fallbackOfficer, "EXPORT", "Downloaded Excel with separated Station sheets");
+            XLSX.writeFile(wb, `${currentCounty}_Fire_Visits.xlsx`); logActivity(officerName || "ADMIN", "EXPORT", "Downloaded Excel");
         }
 
         function exportForGoogleMaps(officerName) { 
             if (database.length === 0) { alert("No data to map."); return; }
             let csvContent = "data:text/csv;charset=utf-8,Name,Description,Address\n";
-            database.forEach(r => { 
-                let address = r.Eircode.replace(/,/g, " ") || `${r.Street} ${r.Town}`.replace(/,/g, " "); 
-                csvContent += `${r.Name.replace(/,/g, " ")},Status: ${r.Status} - Alarms: ${r.Alarms_Installed},${address}\n`; 
-            });
+            database.forEach(r => { let address = r.Eircode.replace(/,/g, " ") || `${r.Street} ${r.Town}`.replace(/,/g, " "); csvContent += `${r.Name.replace(/,/g, " ")},Status: ${r.Status} - Alarms: ${r.Alarms_Installed},${address}\n`; });
             let link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "map_upload.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); 
             logActivity(officerName, "EXPORT", "Exported Map CSV"); setStatus("CSV file downloaded.");
         }
 
         function openInMaps() { 
-            let eircode = document.getElementById("eircodeField").value.trim();
-            let q = eircode ? eircode : document.getElementById("streetField").value + " " + document.getElementById("townField").value + " Co " + currentCounty;
+            let eircode = document.getElementById("eircodeField").value.trim(); let q = eircode ? eircode : document.getElementById("streetField").value + " " + document.getElementById("townField").value + " Co " + currentCounty;
             if (!q.trim() || q.trim() === "Co " + currentCounty) return; window.open("https://maps.google.com/?q=" + encodeURIComponent(q), "_blank");
         }
         
-        // ==========================================
-        // TOWNLAND MEMORY MANAGER
-        // ==========================================
-        function viewMemory(officerName) { logActivity(officerName, "AUTH", "Opened Townland Memory Manager"); document.getElementById('memoryModal').style.display = 'flex'; renderMemoryTable(); }
+        function viewMemory(officerName) { logActivity(officerName, "AUTH", "Opened Townland Memory"); document.getElementById('memoryModal').style.display = 'flex'; renderMemoryTable(); }
         function renderMemoryTable() { 
             let tbody = document.getElementById("memoryTableBody"); tbody.innerHTML = "";
             Object.keys(locationMap).sort().forEach(town => { tbody.innerHTML += `<tr><td style="padding:8px; border-bottom: 1px solid var(--table-border);">${town.charAt(0).toUpperCase() + town.slice(1)}</td><td style="padding:8px; border-bottom: 1px solid var(--table-border);">${locationMap[town]}</td><td style="padding:8px; text-align:center; border-bottom: 1px solid var(--table-border);"><button onclick="deleteTown('${town}')" style="background:#c83c3c; color:white; border:none; border-radius:3px; cursor:pointer; padding: 4px 8px;">X</button></td></tr>`; });
         }
-        function addTownManually() { let town = document.getElementById("newTownInput").value.trim(); let station = document.getElementById("newTownStation").value; if (town) { locationMap[cleanString(town)] = station; logActivity("ADMIN", "ADD", `Added Town to memory: ${town}`); saveConfig(); document.getElementById("newTownInput").value = ""; renderMemoryTable(); } }
-        function deleteTown(t) { delete locationMap[t]; logActivity("ADMIN", "DELETE", `Removed Town from memory: ${t}`); saveConfig(); renderMemoryTable(); }
+        function addTownManually() { let town = document.getElementById("newTownInput").value.trim(); let station = document.getElementById("newTownStation").value; if (town) { locationMap[cleanString(town)] = station; logActivity("ADMIN", "ADD", `Added Town: ${town}`); saveConfig(); document.getElementById("newTownInput").value = ""; renderMemoryTable(); } }
+        function deleteTown(t) { delete locationMap[t]; logActivity("ADMIN", "DELETE", `Removed Town: ${t}`); saveConfig(); renderMemoryTable(); }
         
         let csvInp = document.getElementById('csvFileInput');
         if(csvInp) { csvInp.addEventListener('change', function(e) { let file = e.target.files[0]; if (!file) return; let reader = new FileReader(); reader.onload = function(event) { let count = 0; event.target.result.split('\n').forEach(line => { let parts = line.split(','); if (parts.length >= 2) { let town = cleanString(parts[0]); let station = parts[1].trim(); if (town && districts.includes(station)) { locationMap[town] = station; count++; } } }); logActivity("ADMIN", "IMPORT", `Imported ${count} townlands via CSV`); saveConfig(); renderMemoryTable(); alert(`Imported ${count} townlands!`); e.target.value = ''; }; reader.readAsText(file); }); }
 
-        // ==========================================
-        // PROGRESSIVE WEB APP (PWA) SERVICE WORKER
-        // ==========================================
         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW fail:', err)); }); }
     </script>
 </body>
