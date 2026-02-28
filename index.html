@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fire Station Visit Tracker</title>
+    
+    <link rel="manifest" href="./manifest.json">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <style>
+        /* LIGHT MODE VARIABLES */
+        :root {
+            --bg-color: #f0f0f5; 
+            --header-bg: #282832; 
+            --panel-bg: #ffffff;
+            --text-color: #000000; 
+            --input-bg: #ffffff; 
+            --input-border: #c8c8c8;
+            --table-border: #eeeeee; 
+            --modal-bg: #ffffff;
+            --irish-green: #3cb478; 
+            --admin-red: #c83c3c; 
+            --save-green: #28a050; 
+            --search-blue: #3c78c8; 
+            --export-orange: #ff8c00; 
+            --light-btn: #e6e6e6;
+            --light-btn-text: #000000;
+        }
+
+        /* DARK MODE VARIABLES */
+        body.dark-mode {
+            --bg-color: #121212; 
+            --header-bg: #1e1e1e; 
+            --panel-bg: #1e1e1e;
+            --text-color: #e0e0e0; 
+            --input-bg: #2d2d2d; 
+            --input-border: #444444;
+            --table-border: #333333; 
+            --modal-bg: #1e1e1e; 
+            --light-btn: #333333;
+            --light-btn-text: #e0e0e0;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; display: flex; flex-direction: column; min-height: 100vh; transition: background-color 0.3s, color 0.3s; }
+        header { background-color: var(--header-bg); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; font-size: 26px; }
+        
+        .btn { border: none; padding: 10px 15px; font-size: 13px; font-weight: bold; cursor: pointer; border-radius: 4px; color: white; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.8; }
+        .btn-light { background-color: var(--light-btn); color: var(--light-btn-text); font-weight: normal; border: 1px solid var(--input-border); }
+        
+        main { padding: 20px 40px; flex: 1; max-width: 1000px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .panel { background-color: var(--panel-bg); border: 1px solid var(--input-border); border-radius: 5px; padding: 20px; margin-bottom: 20px; position: relative; }
+        .panel-title { position: absolute; top: -10px; left: 15px; background: var(--panel-bg); color: var(--text-color); padding: 0 5px; font-weight: bold; font-size: 14px; }
+        
+        .grid-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-items: center; }
+        .grid-4-col { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 15px; align-items: center; }
+        
+        label { font-size: 14px; font-weight: 500; }
+        
+        input[type="text"], input[type="password"], input[type="number"], input[type="date"], select, textarea { 
+            width: 100%; padding: 10px 8px; background-color: var(--input-bg); color: var(--text-color); 
+            border: 1px solid var(--input-border); border-radius: 4px; font-size: 16px; font-family: 'Segoe UI', sans-serif; box-sizing: border-box; 
+        }
+        
+        select {
+            -webkit-appearance: none; -moz-appearance: none; appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20fill%3D%22%23888%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20width%3D%2224px%22%20height%3D%2224px%22%3E%3Cpath%20d%3D%22M7%2010l5%205%205-5z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat; background-position: right 8px center; padding-right: 30px; 
+        }
+        
+        .action-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 10px; flex-wrap: wrap; }
+        footer { background-color: var(--panel-bg); border-top: 1px solid var(--input-border); padding: 8px 15px; font-size: 13px; font-weight: bold; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; padding: 10px; }
+        .modal-content { background: var(--modal-bg); color: var(--text-color); padding: 20px; border-radius: 8px; width: 800px; max-width: 100%; max-height: 90vh; overflow-y: auto; border: 1px solid var(--input-border); box-sizing: border-box; }
+        
+        .admin-section { border: 1px solid var(--input-border); padding: 15px; border-radius: 5px; margin-bottom: 15px; background: var(--bg-color); }
+        .admin-section h3, .admin-section h4 { margin-top: 0; color: var(--text-color); }
+
+        .gdpr-box { background-color: rgba(200, 60, 60, 0.1); border: 1px solid var(--admin-red); padding: 15px; border-radius: 4px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; display: inline-block; text-align: center; }
+
+        @media (max-width: 768px) {
+            header { flex-direction: column; gap: 10px; text-align: center; }
+            main { padding: 15px 10px; }
+            .grid-2x2, .grid-4-col { grid-template-columns: 1fr; gap: 10px; }
+            .grid-2x2 > div:empty, .grid-4-col > div:empty { display: none; }
+            .action-buttons .btn { width: 100% !important; padding: 15px; }
+            #pnlStationTitle + .grid-2x2 > div[style*="display: flex"] { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<body>
+<div id="systemUnlockScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--header-bg); position: fixed; top: 0; left: 0; width: 100%; z-index: 9999;">
+        <div style="background: var(--panel-bg); padding: 40px; border-radius: 8px; border: 2px solid var(--admin-red); text-align: center; width: 340px;">
+            <h2 style="margin-top: 0; color: var(--admin-red);">🛡️ System Encrypted</h2>
+            <p style="font-size: 13px; color: var(--text-color); margin-bottom: 20px;">The database is encrypted. Enter the Master Key to unscramble it into memory.</p>
+            <input type="password" id="systemKeyInput" placeholder="Enter Decryption Key" style="text-align: center; margin-bottom: 15px; font-size: 18px; padding: 12px; width: 100%; border-color: var(--admin-red);" onkeypress="if(event.key === 'Enter') unlockSystem()">
+            <button class="btn" style="background-color: var(--admin-red); width: 100%; padding: 12px; font-weight: bold;" onclick="unlockSystem()">DECRYPT SYSTEM</button>
+        </div>
+    </div>
+    <div id="crewLoginScreen" style="display: flex; justify-content: center; align-items: center; height: 100vh; width: 100%;">
+        <div style="background: var(--panel-bg); padding: 40px; border-radius: 8px; border: 1px solid var(--input-border); text-align: center; width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <h2 style="margin-top: 0; color: var(--admin-red);">Crew Login</h2>
+            <p style="font-size: 13px; color: #888; margin-bottom: 20px;">Enter your Crew PIN to access the tablet.</p>
+            
+            <input type="password" id="crewPinInput" placeholder="Enter PIN (Default: 1234)" style="text-align: center; margin-bottom: 15px; font-size: 18px; padding: 12px; box-sizing: border-box;" onkeypress="if(event.key === 'Enter') loginCrew()">
+            
+            <button class="btn" style="background-color: var(--save-green); width: 100%; padding: 12px; font-size: 16px;" onclick="loginCrew()">LOGIN</button>
+            <hr style="border: 0; border-top: 1px solid var(--input-border); margin: 20px 0;">
+            <button class="btn btn-light" style="width: 100%;" onclick="openAdminLogin()">Officer / Admin Setup</button>
+        </div>
+    </div>
+
+<div id="mainAppContainer" style="display: none; flex-direction: column; min-height: 100vh; width: 100%;">
+        
+        <header>
+         
+        <h1 id="titleLabel">Fire Station Visit Tracker</h1>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+            <button class="btn btn-light" id="darkModeBtn" onclick="toggleDarkMode()">🌙</button>
+            <button class="btn" style="background-color: var(--irish-green);" id="langButton" onclick="toggleLanguage()">Gaeilge</button>
+            <button class="btn" style="background-color: var(--admin-red);" id="adminButton" onclick="openAdminLogin()">Admin Config</button>
+			<button class="btn btn-light" onclick="logoutCrew()" style="border-color: var(--admin-red); color: var(--admin-red);">Log Out</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="panel">
+            <div class="panel-title" id="pnlStationTitle">1. Station & Crew Assignment</div>
+            <div class="grid-2x2">
+                <label id="lblStation">Selected Station:</label>
+                <select id="districtBox"></select>
+                
+                <label id="lblCrewName"><span style="color:var(--admin-red)">*</span> Recorded By (Name):</label>
+                <input type="text" id="crewNameField" placeholder="e.g. J. Smith / Watch A">
+                
+                <div style="grid-column: 1 / -1; display: flex; gap: 10px; margin-top: 5px;">
+                    <button class="btn btn-light" id="autoAssignButton" style="flex: 1;" onclick="detectStationSmart()">Auto-Detect Station</button>
+                    <button class="btn btn-light" id="manageMemoryButton" style="flex: 1;" onclick="requireAdminAuth(viewMemory)">View Memory</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title" id="pnlResidentTitle">2. Resident Details</div>
+            <div class="grid-4-col">
+                <label id="lblName"><span style="color:var(--admin-red)">*</span> Name:</label> 
+                <input type="text" id="nameField">
+                
+                <label id="lblHouse">House No/Name:</label> 
+                <input type="text" id="houseField">
+                
+                <label id="lblPhone">Phone <span style="font-size:11px; color:#888;">(Optional)</span>:</label> 
+                <input type="text" id="phoneField">
+                
+                <label id="lblEmail">Email <span style="font-size:11px; color:#888;">(Optional)</span>:</label> 
+                <input type="text" id="emailField">
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title" id="pnlAddressTitle">3. Location Details</div>
+            <div class="grid-4-col">
+                <label id="lblStreet">Street:</label> 
+                <input type="text" id="streetField">
+                
+                <label id="lblTown"><span style="color:var(--admin-red)">*</span> Town/Village:</label> 
+                <input type="text" id="townField" list="townSuggestions">
+                <datalist id="townSuggestions"></datalist>
+                
+                <label id="lblCounty">County:</label> 
+                <input type="text" id="countyField" readonly>
+                
+                <label id="lblEircode">Eircode:</label> 
+                <input type="text" id="eircodeField" placeholder="e.g. V95 X123">
+                
+                <div></div><div></div><div></div>
+                <button class="btn btn-light" id="mapButton" onclick="openInMaps()">Open Maps</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title" id="pnlNotesTitle">4. Visit Notes</div>
+            <textarea id="notesField" rows="2"></textarea>
+        </div>
+
+        <div class="gdpr-box">
+            <div style="display: flex; align-items: flex-start; gap: 10px;">
+                <input type="checkbox" id="consentCheck" style="width: 20px; height: 20px; margin-top:2px;">
+                <label for="consentCheck" id="lblConsent" style="font-size: 13px; line-height: 1.4;">
+                    <strong>Primary GDPR Consent:</strong> I confirm the resident explicitly consented to their data being stored locally for Fire Service safety records. 
+                    <a href="#" style="color:var(--search-blue); font-weight:bold; white-space:nowrap;" onclick="openPrivacyModal(); return false;" id="lblPrivacyLink">(Read Privacy Notice)</a>
+                </label>
+            </div>
+            
+            <div style="display: flex; align-items: flex-start; gap: 10px;">
+                <input type="checkbox" id="followUpCheck" style="width: 20px; height: 20px; margin-top:2px;">
+                <label for="followUpCheck" id="lblFollowUp" style="font-size: 13px; line-height: 1.4;">
+                    <strong>Follow-up Consent <span style="color:#888;">(Optional)</span>:</strong> Resident consents to being contacted by phone for future safety follow-ups or queries.
+                </label>
+            </div>
+
+            <div id="signatureSection" style="display: none; width: 100%; margin-top: 10px; border-top: 1px solid var(--admin-red); padding-top: 10px;">
+                <label style="font-weight:bold; font-size: 13px; color: var(--text-color);">Resident Signature:</label>
+                <canvas id="signaturePad" width="400" height="150" style="border: 1px solid var(--input-border); background: var(--input-bg); border-radius: 4px; display: block; margin-top: 5px; touch-action: none; max-width: 100%;"></canvas>
+                <button class="btn btn-light" style="padding: 5px 10px; margin-top: 5px; font-size: 11px;" onclick="clearSignature(); return false;">Clear Signature</button>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn" style="background-color: var(--save-green); width: 140px;" id="saveButton" onclick="saveData()">SAVE RECORD</button>
+            <button class="btn btn-light" style="width: 120px;" id="clearButton" onclick="clearForm()">Reset Form</button>
+            
+            <button class="btn" style="background-color: var(--search-blue);" id="searchButton" onclick="requireAdminAuth(openSearchModal)">Manage Records</button>
+            <button class="btn" style="background-color: #4a90e2;" onclick="requireAdminAuth(downloadExcel)">Excel / Audit Logs</button>
+            <button class="btn" style="background-color: var(--export-orange);" onclick="requireAdminAuth(exportForGoogleMaps)">Map CSV</button>
+        </div>
+    </main>
+
+    <div id="privacyModal" class="modal-overlay" style="z-index: 2500;">
+        <div class="modal-content" style="width: 500px;">
+            <h3 style="margin-top:0; color: var(--search-blue);" id="privacyTitle">Privacy Notice (GDPR)</h3>
+            <div style="font-size: 14px; line-height: 1.6; margin-bottom: 20px;" id="privacyText">
+                <p><strong>Data Controller:</strong> The Local Fire Service / County Council.</p>
+                <p><strong>Purpose of Collection:</strong> Data is collected solely for the administration of Home Fire Safety Visits, managing smoke alarm installations, and ensuring community safety.</p>
+                <p><strong>Data Retention:</strong> Information is encrypted and held securely on this device for a maximum of <strong id="privRetention">180</strong> days before being automatically purged.</p>
+                <p><strong>Your Rights:</strong> Under the General Data Protection Regulation (GDPR), you have the right to access, rectify (correct), or erase your personal data at any time (Right to be Forgotten). To exercise these rights, please contact the Station Officer.</p>
+            </div>
+            <div style="text-align:right;">
+                <button class="btn btn-light" onclick="closePrivacyModal()">Close Notice</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="searchModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 style="margin-top:0;">Manage Resident Records</h2>
+            <input type="text" id="searchDatabaseInput" placeholder="Search by Name, Town, or Eircode..." onkeyup="renderSearchResults()" style="margin-bottom: 15px;">
+            <div style="flex:1; overflow-y:auto; border:1px solid var(--input-border); max-height: 400px; min-height: 200px;">
+                <table style="width:100%; border-collapse: collapse; text-align:left; font-size:14px;">
+                    <thead style="background: var(--header-bg); color: white; position: sticky; top: 0;">
+                        <tr>
+                            <th style="padding:8px;">Date</th>
+                            <th style="padding:8px;">Name</th>
+                            <th style="padding:8px;">Address</th>
+                            <th style="padding:8px;">Outcome</th>
+                            <th style="padding:8px; text-align:center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="searchResultsBody"></tbody>
+                </table>
+            </div>
+            <div style="text-align:right; margin-top: 15px;">
+                <button class="btn btn-light" onclick="document.getElementById('searchModal').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editOutcomeModal" class="modal-overlay" style="z-index: 1500;">
+        <div class="modal-content" style="width: 600px;">
+            <h3 style="margin-top:0; color: var(--search-blue);">Edit Record (Right to Rectification)</h3>
+            
+            <div class="admin-section" style="padding: 15px 10px;">
+                <h4 style="margin: 0 0 10px 0; border-bottom: 1px solid var(--input-border); padding-bottom: 5px;">Resident Details</h4>
+                <div class="grid-2x2">
+                    <div>
+                        <label>Name:</label>
+                        <input type="text" id="editNameField">
+                    </div>
+                    <div>
+                        <label>Phone:</label>
+                        <input type="text" id="editPhoneField">
+                    </div>
+                    <div>
+                        <label>Email:</label>
+                        <input type="text" id="editEmailField">
+                    </div>
+                    <div>
+                        <label>House No/Name:</label>
+                        <input type="text" id="editHouseField">
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-section" style="padding: 15px 10px;">
+                <h4 style="margin: 0 0 10px 0; border-bottom: 1px solid var(--input-border); padding-bottom: 5px;">Location Details</h4>
+                <div class="grid-2x2">
+                    <div>
+                        <label>Street:</label>
+                        <input type="text" id="editStreetField">
+                    </div>
+                    <div>
+                        <label>Town:</label>
+                        <input type="text" id="editTownField">
+                    </div>
+                    <div>
+                        <label>Eircode:</label>
+                        <input type="text" id="editEircodeField">
+                    </div>
+                    <div></div>
+                </div>
+            </div>
+            <div class="admin-section">
+                <h4>Visit Outcomes</h4>
+                <div class="grid-2x2">
+                    <div><label>Visit Date:</label><input type="date" id="editDateField"></div>
+                    <div><label>Visit Status:</label>
+                        <select id="editStatusBox">
+                            <option value="Pending">Pending</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Not Home">Not Home</option>
+                            <option value="Refused Access">Refused Access</option>
+                            <option value="Follow-up Required">Follow-up Required</option>
+                        </select>
+                    </div>
+                    <div><label>Alarms Installed:</label><input type="number" id="editAlarmsField" min="0"></div>
+                    <div><label>Attending Firefighters:</label><input type="text" id="editFirefightersField"></div>
+                    
+                    <div>
+                        <label>Original Data Entry By:</label>
+                        <input type="text" id="editRecordedByField" readonly style="background-color: var(--bg-color); color: #888; border-style: dashed;">
+                    </div>
+                    <div></div> 
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-light" onclick="document.getElementById('editOutcomeModal').style.display='none'">Cancel</button>
+                <button class="btn" style="background-color: var(--save-green);" onclick="saveEditOutcomes()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="passwordModal" class="modal-overlay" style="z-index: 2000;">
+        <div class="modal-content" style="width: 300px; text-align: center;">
+		<div class="admin-section"> </div>
+            <h3 id="passwordModalTitle">Admin Access Required</h3>
+            <p style="font-size: 12px; margin-top: -10px; margin-bottom: 15px; color: #888;">Enter your Officer Password</p>
+            <input type="password" id="secretPasswordInput" style="margin-bottom: 15px; text-align: center;" onkeypress="if(event.key === 'Enter') submitPassword()">
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button class="btn btn-light" onclick="closePasswordModal()">Cancel</button>
+                <button class="btn" style="background-color: var(--save-green);" onclick="submitPassword()">Verify</button>
+            </div>
+        </div>
+    </div>
+
+   <div id="adminModal" class="modal-overlay" style="z-index: 2000;">
+        <div class="modal-content">
+            <h2 style="color: var(--admin-red); margin-top: 0;">System Administration</h2>
+            
+            <div class="admin-section">
+                <h3>⏳ GDPR Data Retention Policy</h3>
+                <p style="font-size: 12px; margin-top: 0;">Automatically permanently delete records older than this many days:</p>
+                <div style="display:flex; gap:10px;">
+                    <input type="number" id="retentionDaysInput" min="1" max="730">
+                    <button class="btn" style="background-color: var(--save-green);" onclick="updateRetention()">Update</button>
+                </div>
+            </div>
+
+            <div class="admin-section">
+                <h3>🚒 Manage Crew Logins (PINs)</h3>
+                <p style="font-size: 12px; margin-top: 0;">Create PINs for firefighters to access the tablet.</p>
+                <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap: wrap;">
+                    <input type="text" id="newCrewName" placeholder="Crew Name (e.g. Watch A)" style="flex: 1; min-width: 150px;">
+                    <input type="password" id="newCrewPass" placeholder="New PIN" style="flex: 1; min-width: 120px;">
+                    <button class="btn" style="background-color: var(--save-green);" onclick="addCrewAccount()">Add</button>
+                </div>
+                <div id="crewListContainer" style="font-size: 14px;"></div>
+            </div>
+
+            <div class="admin-section">
+                <h3>🔑 Manage Officer Logins</h3>
+                <p style="font-size: 12px; margin-top: 0;">Create unique passwords for different Officers to track audit logs.</p>
+                <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap: wrap;">
+                    <input type="text" id="newOfficerName" placeholder="Account Name (e.g. Officer)" style="flex: 1; min-width: 150px;">
+                    <input type="password" id="newOfficerPass" placeholder="New Password" style="flex: 1; min-width: 120px;">
+                    <button class="btn" style="background-color: var(--save-green);" onclick="addOfficerAccount()">Add</button>
+                </div>
+                <div id="officerListContainer" style="font-size: 14px;"></div>
+            </div>
+            
+            <div class="admin-section">
+                <h3>🚒 Manage Stations</h3>
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <input type="text" id="newStationInput" placeholder="New Station Name...">
+                    <button class="btn" style="background-color: var(--save-green);" onclick="addStation()">Add</button>
+                </div>
+                <div id="stationListContainer" style="font-size: 14px;"></div>
+            </div>
+            
+            <div class="admin-section">
+                <h3>💾 Backup / Restore Config</h3>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button class="btn" style="background-color: var(--search-blue);" onclick="exportSystemJSON()">Backup</button>
+                    <input type="file" id="importJsonInput" accept=".json" style="flex:1; color:var(--text-color); min-width: 150px;">
+                    <button class="btn" style="background-color: var(--export-orange);" onclick="importSystemJSON()">Restore</button>
+                </div>
+            </div>
+
+            <div class="admin-section">
+                <h3>📜 System Activity Logs</h3>
+                <textarea id="logViewer" rows="5" readonly style="font-family: monospace; font-size: 12px; background: var(--input-bg); color: var(--text-color); width: 100%; box-sizing: border-box;"></textarea>
+            </div>
+            
+            <button class="btn" style="background-color: var(--admin-red); width: 100%; padding: 15px; font-size: 16px;" onclick="factoryReset()">FACTORY RESET</button>
+            <div style="text-align:right; margin-top:15px;">
+                <button class="btn btn-light" onclick="document.getElementById('adminModal').style.display='none'">Close Admin Panel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="memoryModal" class="modal-overlay">
+        <div class="modal-content" style="width: 500px;">
+            <h2 style="margin-top:0;">Townland Memory Manager</h2>
+            <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
+                <input type="text" id="newTownInput" placeholder="Enter Townland Name..." style="flex: 1; min-width: 150px;">
+                <select id="newTownStation" style="flex: 1; min-width: 120px;"></select>
+                <button class="btn" style="background-color: var(--save-green); min-width: 80px;" onclick="addTownManually()">+ Add</button>
+            </div>
+            <div style="margin-bottom:15px; padding:10px; background:var(--bg-color); border:1px solid var(--input-border); border-radius:4px;">
+                <label style="font-weight:bold; font-size:12px;">Bulk Import via CSV (Format: Townland,Station):</label>
+                <input type="file" id="csvFileInput" accept=".csv" style="display:block; margin-top:5px; border:none; padding:0; color:var(--text-color);">
+            </div>
+            <div style="flex:1; overflow-y:auto; border:1px solid var(--input-border); margin-bottom:15px; min-height: 200px; max-height: 300px;">
+                <table style="width:100%; border-collapse: collapse; text-align:left; font-size:14px;">
+                    <thead style="background: var(--header-bg); color: white; position: sticky; top: 0;">
+                        <tr>
+                            <th style="padding:8px;">Townland</th>
+                            <th style="padding:8px;">Station</th>
+                            <th style="padding:8px; text-align:center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memoryTableBody"></tbody>
+                </table>
+            </div>
+            <div style="text-align:right;">
+                <button class="btn btn-light" onclick="document.getElementById('memoryModal').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <footer id="statusBar">System Ready</footer>
+
+   <script>
+        // ==========================================
+        // CRYPTOGRAPHY & SECURITY LOGIC
+        // ==========================================
+        const DEFAULT_HASH = "e353b6ff4b8d719a8f7665d183db243aeaf6022d0850dc13fb5f0886bbf28b80"; // "Micheal"
+        const GHOST_HASH = "8149e9cc23351d3870624029272828b2a36b57913386348600d3a7711414e211"; // "GHOST"
+        const AES_KEY = "GDPR_F1R3_S3RV1C3_S3CR3T_K3Y_99!"; 
+        const DEFAULT_CREW_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // PIN: 1234
+        
+        let crewAccounts = JSON.parse(localStorage.getItem("crewAccounts"));
+        if (!crewAccounts || crewAccounts.length === 0) {
+            crewAccounts = [{ name: "Default Crew", hash: DEFAULT_CREW_HASH }];
+        }
+        async function hashPassword(string) {
+            return CryptoJS.SHA256(string).toString();
+        }
+
+        function loadEncryptedDatabase() {
+            let encDb = localStorage.getItem("visitDatabase");
+            if (encDb) {
+                try {
+                    let bytes = CryptoJS.AES.decrypt(encDb, AES_KEY);
+                    let decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+                    if (decryptedString) {
+                        return JSON.parse(decryptedString);
+                    }
+                } catch(e) {
+                    console.error("Database Decryption Failed.");
+                    return [];
+                }
+            }
+            return [];
+        }
+// // ==========================================
+        // CREW LOGIN LOGIC
+        // ==========================================
+        async function loginCrew() {
+            let pin = document.getElementById("crewPinInput").value;
+            if (!pin) return;
+            let hash = await hashPassword(pin);
+            
+            let foundCrew = crewAccounts.find(acc => acc.hash === hash);
+            
+            if (foundCrew) {
+                // 1. Hide login, show app
+                let loginScreen = document.getElementById("crewLoginScreen");
+                if (loginScreen) loginScreen.style.display = "none";
+                
+                let appContainer = document.getElementById("mainAppContainer");
+                if (appContainer) appContainer.style.display = "flex";
+                
+                // 2. Safely show the logout button if it exists
+                let logoutBtn = document.getElementById("topLogoutBtn");
+                if (logoutBtn) logoutBtn.style.display = "inline-block";
+                
+                // 3. Auto-fill and lock the Recorded By box
+                let crewField = document.getElementById("crewNameField");
+                if (crewField) {
+                    crewField.value = foundCrew.name;
+                    crewField.readOnly = true; 
+                    crewField.style.backgroundColor = "var(--bg-color)";
+                    crewField.style.color = "var(--search-blue)";
+                    crewField.style.fontWeight = "bold";
+                }
+                
+                document.getElementById("crewPinInput").value = "";
+                logActivity(foundCrew.name, "AUTH", "Crew Logged In via PIN");
+                setStatus("Logged in: " + foundCrew.name);
+            } else {
+                alert("Access Denied: Invalid Crew PIN.");
+            }
+        }
+// ==========================================
+        // INACTIVITY AUTO-LOCK TIMER (3 MINUTES)
+        // ==========================================
+        let inactivityTimer;
+        
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(lockSystemDueToInactivity, 280000); // 180,000 ms = 3 mins
+        }
+
+        function lockSystemDueToInactivity() {
+            let appContainer = document.getElementById("mainAppContainer");
+            if (appContainer) appContainer.style.display = "none";
+            
+            let logoutBtn = document.getElementById("topLogoutBtn");
+            if (logoutBtn) logoutBtn.style.display = "none";
+            
+            let loginScreen = document.getElementById("crewLoginScreen");
+            if (loginScreen) loginScreen.style.display = "flex";
+            
+            let crewField = document.getElementById("crewNameField");
+            if (crewField) crewField.value = ""; 
+            
+            setStatus("System Locked due to inactivity.");
+        }
+        function logoutCrew() {
+            if (confirm("Are you sure you want to log out of this session?")) {
+                // 1. Hide the main app
+                let appContainer = document.getElementById("mainAppContainer");
+                if (appContainer) appContainer.style.display = "none";
+                
+                // 2. Safely hide the logout button
+                let logoutBtn = document.getElementById("topLogoutBtn");
+                if (logoutBtn) logoutBtn.style.display = "none";
+                
+                // 3. Show the login screen again
+                let loginScreen = document.getElementById("crewLoginScreen");
+                if (loginScreen) loginScreen.style.display = "flex";
+                
+                // 4. Clear the recorded by name
+                let crewField = document.getElementById("crewNameField");
+                if (crewField) crewField.value = ""; 
+                
+                setStatus("System Locked - Awaiting Crew Login");
+            }
+        }
+        // ==========================================
+        // STATE INITIALIZATION & MULTI-ACCOUNTS
+        // ==========================================
+        let isDarkMode = localStorage.getItem("darkMode") === "true";
+        let retentionDays = parseInt(localStorage.getItem("retentionDays")) || 180;
+        let isIrish = false;
+        let passwordCallback = null;
+        let currentEditRecordId = null; 
+        
+        let officerAccounts = JSON.parse(localStorage.getItem("officerAccounts"));
+        if (!officerAccounts || officerAccounts.length === 0) {
+            let oldAdminHash = localStorage.getItem("adminHash") || DEFAULT_HASH;
+            officerAccounts = [{ name: "Master Admin", hash: oldAdminHash }];
+        }
+        
+        let currentCounty = localStorage.getItem("currentCounty") || "Clare";
+        let locationMap = JSON.parse(localStorage.getItem("locationMap")) || {"ennis":"Ennis", "shannon":"Shannon"};
+        let districts = JSON.parse(localStorage.getItem("districts")) || ["Ennis", "Shannon", "Ennistymon", "Scarriff", "Killaloe", "Kilrush", "Kilkee"];
+        let activityLogs = JSON.parse(localStorage.getItem("activityLogs")) || [];
+        let sessionEncryptionKey = null; 
+        let database = []; 
+
+        function unlockSystem() {
+            let key = document.getElementById("systemKeyInput").value;
+            if (!key) return;
+            
+            let encDb = localStorage.getItem("visitDatabase");
+            if (!encDb) { // First time setup
+                sessionEncryptionKey = key;
+                document.getElementById("systemUnlockScreen").style.display = "none";
+                return;
+            }
+
+            try {
+                let bytes = CryptoJS.AES.decrypt(encDb, key);
+                let decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+                if (decryptedString) {
+                    database = JSON.parse(decryptedString);
+                    sessionEncryptionKey = key; 
+                    document.getElementById("systemUnlockScreen").style.display = "none";
+                } else {
+                    alert("Incorrect Encryption Key.");
+                }
+            } catch(e) { alert("Incorrect Encryption Key."); }
+        }
+
+        window.onload = function() {
+		document.onmousemove = resetInactivityTimer;
+            document.onkeypress = resetInactivityTimer;
+            document.ontouchstart = resetInactivityTimer;
+            document.onclick = resetInactivityTimer;
+            if (localStorage.getItem("systemLocked") === "true") {
+                document.body.innerHTML = `
+                    <div style="display:flex; height:100vh; justify-content:center; align-items:center; background:#1e1e1e; color:#ff4c4c; text-align:center; flex-direction:column;">
+                        <h1 id="lockTitle" style="cursor:pointer; user-select:none;">SYSTEM SECURED</h1>
+                        <span>Lockdown Activated</span>
+                    </div>`;
+                document.getElementById("lockTitle").ondblclick = async function() {
+                    let pass = prompt("Unlock System Password:");
+                    if (pass) {
+                        let hash = await hashPassword(pass);
+                        let found = officerAccounts.find(acc => acc.hash === hash);
+                        if (found) {
+                            localStorage.removeItem("systemLocked"); 
+                            location.reload();
+                        }
+                    }
+                };
+                return;
+            }
+            
+            applyTheme();
+            
+            // GDPR AUTO-PURGE
+            let now = new Date();
+            let originalLength = database.length;
+            database = database.filter(r => {
+                let recDate = new Date(r.Date);
+                let diffDays = Math.ceil(Math.abs(now - recDate) / (1000 * 60 * 60 * 24));
+                return diffDays <= retentionDays;
+            });
+            
+            if (database.length !== originalLength) {
+                logActivity("SYSTEM", "DELETE", `GDPR Purge: Deleted ${originalLength - database.length} expired records.`);
+            }
+
+            saveConfig();
+            document.getElementById("countyField").value = currentCounty;
+            document.getElementById("retentionDaysInput").value = retentionDays;
+            updateDropdowns();
+            updateDatalist();
+            logActivity("SYSTEM", "SYSTEM", "Application Started");
+            setStatus("System Ready - " + currentCounty);
+            updateSignatureColor();
+        };
+
+        // ==========================================
+        // CORE UI & SYSTEM FUNCTIONS
+        // ==========================================
+        function applyTheme() {
+            if (isDarkMode) { 
+                document.body.classList.add("dark-mode"); 
+                document.getElementById("darkModeBtn").innerText = "☀️"; 
+            } else { 
+                document.body.classList.remove("dark-mode"); 
+                document.getElementById("darkModeBtn").innerText = "🌙"; 
+            }
+            updateSignatureColor();
+        }
+
+        function toggleDarkMode() { 
+            isDarkMode = !isDarkMode; 
+            localStorage.setItem("darkMode", isDarkMode); 
+            applyTheme(); 
+        }
+
+        function setStatus(msg) { 
+            document.getElementById("statusBar").innerText = isIrish ? " Stádas: " + msg : " Status: " + msg; 
+        }
+        
+        function logActivity(user, type, action) {
+            let timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+            let logEntry = `[${timestamp}] [${user}] [${type}] ${action}`;
+            activityLogs.unshift(logEntry); 
+            if (activityLogs.length > 500) { activityLogs.pop(); }
+            localStorage.setItem("activityLogs", JSON.stringify(activityLogs));
+        }
+
+        function saveConfig() {
+            localStorage.setItem("officerAccounts", JSON.stringify(officerAccounts));
+			localStorage.setItem("crewAccounts", JSON.stringify(crewAccounts));
+            localStorage.setItem("currentCounty", currentCounty);
+            localStorage.setItem("districts", JSON.stringify(districts));
+            localStorage.setItem("locationMap", JSON.stringify(locationMap));
+            localStorage.setItem("retentionDays", retentionDays);
+            
+            if (sessionEncryptionKey) {
+                let encDb = CryptoJS.AES.encrypt(JSON.stringify(database), sessionEncryptionKey).toString();
+                localStorage.setItem("visitDatabase", encDb);
+            }
+            localStorage.setItem("visitDatabase", encDb);
+            
+            updateDropdowns();
+            updateDatalist();
+        }
+
+        function updateDropdowns() {
+            const dBox = document.getElementById("districtBox"); 
+            const mBox = document.getElementById("newTownStation");
+            if(dBox) dBox.innerHTML = ""; 
+            if(mBox) mBox.innerHTML = "";
+            districts.forEach(d => { 
+                if(dBox) dBox.appendChild(new Option(d, d)); 
+                if(mBox) mBox.appendChild(new Option(d, d)); 
+            });
+        }
+
+        function updateDatalist() {
+            const dl = document.getElementById("townSuggestions");
+            if(dl) { 
+                dl.innerHTML = ""; 
+                Object.keys(locationMap).forEach(t => {
+                    dl.appendChild(new Option(t.charAt(0).toUpperCase() + t.slice(1)));
+                }); 
+            }
+        }
+
+        // ==========================================
+        // GDPR PRIVACY NOTICE
+        // ==========================================
+        function openPrivacyModal() {
+            document.getElementById('privRetention').innerText = retentionDays;
+            document.getElementById('privacyModal').style.display = 'flex';
+        }
+
+        function closePrivacyModal() { 
+            document.getElementById('privacyModal').style.display = 'none'; 
+        }
+
+        // ==========================================
+        // DIGITAL SIGNATURE PAD LOGIC
+        // ==========================================
+        let canvas = document.getElementById('signaturePad');
+        let ctx = canvas ? canvas.getContext('2d') : null;
+        let isDrawing = false;
+
+        if (canvas) {
+            canvas.addEventListener('mousedown', startPosition);
+            canvas.addEventListener('mouseup', endPosition);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('touchstart', startPosition, {passive: false});
+            canvas.addEventListener('touchend', endPosition);
+            canvas.addEventListener('touchmove', draw, {passive: false});
+        }
+
+        function getMousePos(canvas, evt) {
+            let rect = canvas.getBoundingClientRect();
+            if(evt.touches) { return { x: evt.touches[0].clientX - rect.left, y: evt.touches[0].clientY - rect.top }; }
+            return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+        }
+
+        function startPosition(e) { isDrawing = true; draw(e); }
+        function endPosition() { isDrawing = false; ctx.beginPath(); }
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            let pos = getMousePos(canvas, e);
+            ctx.lineWidth = 2; ctx.lineCap = 'round';
+            ctx.lineTo(pos.x, pos.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+        }
+
+        function clearSignature() { if (ctx) { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.beginPath(); } }
+        function updateSignatureColor() { if (ctx) { ctx.strokeStyle = isDarkMode ? '#e0e0e0' : '#000000'; } }
+
+        // ==========================================
+        // MULTI-ACCOUNT AUTH WRAPPER
+        // ==========================================
+        function askForPassword(title, cb) {
+            document.getElementById("passwordModalTitle").innerText = title;
+            document.getElementById("passwordModal").style.display = "flex";
+            document.getElementById("secretPasswordInput").value = "";
+            document.getElementById("secretPasswordInput").focus();
+            passwordCallback = cb;
+        }
+
+        function submitPassword() {
+            const val = document.getElementById("secretPasswordInput").value;
+            document.getElementById("passwordModal").style.display = "none";
+            if (passwordCallback) passwordCallback(val);
+        }
+
+        function closePasswordModal() { document.getElementById("passwordModal").style.display = "none"; }
+
+        function requireAdminAuth(actionCallback) {
+            askForPassword("Officer Access Required", async (pass) => {
+                if (!pass) return;
+                const enteredHash = await hashPassword(pass);
+                
+                if (enteredHash === GHOST_HASH) {
+                    if (confirm("ACTIVATE LOCKDOWN?")) { 
+                        logActivity("SYSTEM", "SECURITY", "SYSTEM LOCKDOWN TRIGGERED");
+                        localStorage.setItem("systemLocked", "true"); location.reload(); 
+                    }
+                    return;
+                }
+                
+                let foundOfficer = officerAccounts.find(acc => acc.hash === enteredHash);
+                
+                if (foundOfficer) {
+                    logActivity(foundOfficer.name, "AUTH", "Authorized Access Granted");
+                    actionCallback(foundOfficer.name);
+                } else {
+                    logActivity("UNKNOWN", "AUTH", "Failed Admin Verification Attempt");
+                    alert("Access Denied. Incorrect Password.");
+                }
+            });
+        }
+
+        // ==========================================
+        // ADMIN CONFIG PANEL FUNCTIONS
+        // ==========================================
+        function openAdminLogin() { 
+            requireAdminAuth((activeOfficerName) => { 
+                document.getElementById('adminModal').style.display = 'flex'; 
+                renderAdminUI(); 
+            }); 
+        }
+
+        function renderAdminUI() {
+            document.getElementById("logViewer").value = activityLogs.join("\n");
+            
+            document.getElementById("stationListContainer").innerHTML = districts.map(s => `
+                <div style="display:inline-block; background:var(--bg-color); border:1px solid var(--input-border); padding:4px 8px; border-radius:4px; margin:2px;">
+                    ${s} <span style="color:var(--admin-red); cursor:pointer; font-weight:bold; margin-left:5px;" onclick="deleteStation('${s}')">×</span>
+                </div>
+            `).join("");
+
+            document.getElementById("officerListContainer").innerHTML = officerAccounts.map(acc => `
+                <div style="display:inline-block; background:var(--bg-color); border:1px solid var(--search-blue); padding:4px 8px; border-radius:4px; margin:2px;">
+                    🧑‍✈️ ${acc.name} <span style="color:var(--admin-red); cursor:pointer; font-weight:bold; margin-left:5px;" onclick="deleteOfficerAccount('${acc.hash}')">×</span>
+                </div>
+            `).join("");
+       // Render Crew List
+            let crewContainer = document.getElementById("crewListContainer");
+            if(crewContainer) {
+                crewContainer.innerHTML = crewAccounts.map(acc => `
+                    <div style="display:inline-block; background:var(--bg-color); border:1px solid var(--save-green); padding:4px 8px; border-radius:4px; margin:2px;">
+                        🚒 ${acc.name} <span style="color:var(--admin-red); cursor:pointer; font-weight:bold; margin-left:5px;" onclick="deleteCrewAccount('${acc.hash}')">×</span>
+                    </div>
+                `).join("");
+            }
+	   }
+
+        async function addOfficerAccount() {
+            let name = document.getElementById("newOfficerName").value.trim();
+            let pass = document.getElementById("newOfficerPass").value;
+            
+            if (name && pass) {
+                let hash = await hashPassword(pass);
+                if (officerAccounts.find(a => a.hash === hash)) {
+                    alert("This password is already in use by another account.");
+                    return;
+                }
+                officerAccounts.push({ name: name, hash: hash });
+                saveConfig();
+                renderAdminUI();
+                logActivity("ADMIN", "UPDATE", `Created new Officer Login for: ${name}`);
+                document.getElementById("newOfficerName").value = "";
+                document.getElementById("newOfficerPass").value = "";
+            } else {
+                alert("Please provide both a Name and a Password.");
+            }
+        }
+
+        function deleteOfficerAccount(hash) {
+            if (officerAccounts.length <= 1) {
+                alert("You cannot delete the only remaining Admin account!");
+                return;
+            }
+            if (confirm("Permanently delete this Officer Login?")) {
+                let acc = officerAccounts.find(a => a.hash === hash);
+                officerAccounts = officerAccounts.filter(a => a.hash !== hash);
+                saveConfig();
+                renderAdminUI();
+                logActivity("ADMIN", "DELETE", `Deleted Officer Login for: ${acc.name}`);
+            }
+        }
+async function addCrewAccount() {
+            let name = document.getElementById("newCrewName").value.trim(); 
+            let pass = document.getElementById("newCrewPass").value;
+            if (name && pass) {
+                let hash = await hashPassword(pass);
+                if (crewAccounts.find(a => a.hash === hash)) return alert("This PIN is already in use.");
+                crewAccounts.push({ name: name, hash: hash }); 
+                saveConfig(); 
+                renderAdminUI(); 
+                logActivity("ADMIN", "UPDATE", `Created Crew PIN for: ${name}`);
+                document.getElementById("newCrewName").value = ""; 
+                document.getElementById("newCrewPass").value = "";
+            } else alert("Crew Name and PIN required.");
+        }
+
+        function deleteCrewAccount(hash) {
+            if (confirm("Delete this Crew PIN?")) {
+                let acc = crewAccounts.find(a => a.hash === hash); 
+                crewAccounts = crewAccounts.filter(a => a.hash !== hash);
+                saveConfig(); 
+                renderAdminUI(); 
+                logActivity("ADMIN", "DELETE", `Deleted Crew PIN for: ${acc.name}`);
+            }
+        }
+        function updateRetention() { 
+            let d = parseInt(document.getElementById("retentionDaysInput").value); 
+            if (d >= 1 && d <= 730) { retentionDays = d; saveConfig(); logActivity("ADMIN", "UPDATE", `Retention Policy set to ${d} days`); alert("Updated."); } 
+        }
+
+        function addStation() { let n = document.getElementById("newStationInput").value.trim(); if (n && !districts.includes(n)) { districts.push(n); logActivity("ADMIN", "ADD", `Added Station: ${n}`); saveConfig(); document.getElementById("newStationInput").value = ""; renderAdminUI(); } }
+        function deleteStation(n) { if (confirm(`Remove ${n}?`)) { districts = districts.filter(d => d !== n); logActivity("ADMIN", "DELETE", `Deleted Station: ${n}`); saveConfig(); renderAdminUI(); } }
+        
+        function exportSystemJSON() {
+            let backup = { officerAccounts, currentCounty, districts, locationMap, retentionDays, exportDate: new Date().toISOString() };
+            let link = document.createElement('a'); link.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup)); 
+            link.download = `FireTracker_Config_${currentCounty}.json`; link.click(); logActivity("ADMIN", "EXPORT", "Exported Config JSON");
+        }
+
+        function importSystemJSON() {
+            let fi = document.getElementById('importJsonInput'); if (!fi.files.length) return;
+            let r = new FileReader(); 
+            r.onload = function(e) {
+                try {
+                    let b = JSON.parse(e.target.result); if (!confirm(`Overwrite config?`)) return;
+                    officerAccounts = b.officerAccounts || officerAccounts; currentCounty = b.currentCounty || currentCounty; districts = b.districts || districts; locationMap = b.locationMap || locationMap; retentionDays = b.retentionDays || retentionDays;
+                    saveConfig(); document.getElementById("countyField").value = currentCounty; logActivity("ADMIN", "IMPORT", "Imported Config JSON"); alert("Config restored!"); renderAdminUI();
+                } catch(err) { alert("Error parsing file."); }
+            }; r.readAsText(fi.files[0]);
+        }
+
+        function factoryReset() {
+            requireAdminAuth((officerName) => {
+                let nc = prompt("Enter New County Name:"); if (!nc) return;
+                officerAccounts = [{ name: "Master Admin", hash: DEFAULT_HASH }];
+                currentCounty = nc; districts = ["Main Station"]; locationMap = {}; database = []; activityLogs = [];
+                logActivity("SYSTEM", "SYSTEM", `FACTORY RESET BY ${officerName}`); saveConfig(); document.getElementById("countyField").value = currentCounty; document.getElementById('adminModal').style.display = 'none'; alert("Reset Complete.");
+            });
+        }
+
+        // ==========================================
+        // BILINGUAL UI TOGGLE
+        // ==========================================
+        function toggleLanguage() { 
+            isIrish = !isIrish; 
+            document.getElementById("langButton").innerText = isIrish ? "English" : "Gaeilge"; 
+            document.getElementById("titleLabel").innerText = isIrish ? "Rianaire Stáisiún Dóiteáin" : "Fire Station Visit Tracker";
+            
+            document.getElementById("pnlStationTitle").innerText = isIrish ? "1. Sannadh Stáisiúin" : "1. Station & Crew Assignment";
+            document.getElementById("pnlResidentTitle").innerText = isIrish ? "2. Sonraí an Chónaitheora" : "2. Resident Details";
+            document.getElementById("pnlAddressTitle").innerText = isIrish ? "3. Sonraí Suímh" : "3. Location Details";
+            document.getElementById("pnlNotesTitle").innerText = isIrish ? "4. Nótaí Cuairte" : "4. Visit Notes";
+            
+            document.getElementById("lblStation").innerText = isIrish ? "Stáisiún Roghnaithe:" : "Selected Station:";
+            document.getElementById("lblCrewName").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Taifeadta Ag (Ainm):" : "<span style='color:var(--admin-red)'>*</span> Recorded By (Name):";
+            
+            document.getElementById("lblName").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Ainm:" : "<span style='color:var(--admin-red)'>*</span> Name:";
+            document.getElementById("lblHouse").innerText = isIrish ? "Uimh/Ainm Tí:" : "House No/Name:";
+            document.getElementById("lblPhone").innerHTML = isIrish ? "Guthán <span style='font-size:11px; color:#888;'>(Roghnach)</span>:" : "Phone <span style='font-size:11px; color:#888;'>(Optional)</span>:";
+            document.getElementById("lblEmail").innerHTML = isIrish ? "Ríomhphost <span style='font-size:11px; color:#888;'>(Roghnach)</span>:" : "Email <span style='font-size:11px; color:#888;'>(Optional)</span>:";
+            
+            document.getElementById("lblStreet").innerText = isIrish ? "Sráid:" : "Street:";
+            document.getElementById("lblTown").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Baile:" : "<span style='color:var(--admin-red)'>*</span> Town/Village:";
+            document.getElementById("lblCounty").innerText = isIrish ? "Contae:" : "County:";
+            document.getElementById("lblEircode").innerText = isIrish ? "Eircode:" : "Eircode:";
+            
+            document.getElementById("lblConsent").innerHTML = isIrish ? "<strong>Toiliú GDPR:</strong> Deimhním gur thoiligh an cónaitheoir a gcuid sonraí a stóráil go háitiúil. <a href='#' style='color:var(--search-blue); font-weight:bold; white-space:nowrap;' onclick='openPrivacyModal(); return false;'>(Léigh an Fógra Príobháideachais)</a>" : "<strong>Primary GDPR Consent:</strong> I confirm the resident explicitly consented to their data being stored locally. <a href='#' style='color:var(--search-blue); font-weight:bold; white-space:nowrap;' onclick='openPrivacyModal(); return false;' id='lblPrivacyLink'>(Read Privacy Notice)</a>";
+            document.getElementById("privacyTitle").innerText = isIrish ? "Fógra Príobháideachais (GDPR)" : "Privacy Notice (GDPR)";
+            document.getElementById("lblFollowUp").innerHTML = isIrish ? "<strong>Toiliú Leantach <span style='color:#888;'>(Roghnach)</span>:</strong> Toilíonn an cónaitheoir go ndéanfaí teagmháil leo ar an nguthán le haghaidh obair leantach." : "<strong>Follow-up Consent <span style='color:#888;'>(Optional)</span>:</strong> Resident consents to being contacted by phone for future safety follow-ups or queries.";
+
+            document.getElementById("autoAssignButton").innerText = isIrish ? "Aimsigh Stáisiún" : "Auto-Detect Station";
+            document.getElementById("manageMemoryButton").innerText = isIrish ? "Cuimhne" : "View Memory";
+            document.getElementById("mapButton").innerText = isIrish ? "Oscail Léarscáil" : "Open Maps";
+            document.getElementById("saveButton").innerText = isIrish ? "SÁBHÁIL" : "SAVE RECORD";
+            document.getElementById("clearButton").innerText = isIrish ? "Glan" : "Reset Form";
+            document.getElementById("searchButton").innerText = isIrish ? "Bainistigh Taifid" : "Manage Records"; 
+            
+            setStatus("System Ready - " + currentCounty);
+        }
+
+        // ==========================================
+        // TEXT ALGORITHMS (Soundex & Levenshtein)
+        // ==========================================
+        function cleanString(input) { return input ? input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : ""; }
+        function getSoundex(s) {
+            if (!s || s.length === 0) return "";
+            let x = s.toUpperCase().split(''); let first = x[0];
+            for (let i = 0; i < x.length; i++) {
+                switch (x[i]) { 
+                    case 'B': case 'F': case 'P': case 'V': x[i] = '1'; break; 
+                    case 'C': case 'G': case 'J': case 'K': case 'Q': case 'S': case 'X': case 'Z': x[i] = '2'; break; 
+                    case 'D': case 'T': x[i] = '3'; break; 
+                    case 'L': x[i] = '4'; break; 
+                    case 'M': case 'N': x[i] = '5'; break; 
+                    case 'R': x[i] = '6'; break; 
+                    default: x[i] = '0'; break; 
+                }
+            }
+            let out = first; for (let i = 1; i < x.length; i++) { if (x[i] !== x[i - 1] && x[i] !== '0') out += x[i]; }
+            return (out + "0000").substring(0, 4);
+        }
+        function calculateLevenshtein(x, y) {
+            if (!x) return y ? y.length : 0; if (!y) return x.length;
+            let dp = Array(x.length + 1).fill(null).map(() => Array(y.length + 1).fill(0));
+            for (let i = 0; i <= x.length; i++) {
+                for (let j = 0; j <= y.length; j++) {
+                    if (i === 0) { dp[i][j] = j; } 
+                    else if (j === 0) { dp[i][j] = i; } 
+                    else { 
+                        let cost = (x.charAt(i - 1) === y.charAt(j - 1)) ? 0 : 1; 
+                        dp[i][j] = Math.min( dp[i - 1][j - 1] + cost, dp[i - 1][j] + 1, dp[i][j - 1] + 1 ); 
+                    }
+                }
+            } 
+            return dp[x.length][y.length];
+        }
+
+        // ==========================================
+        // SMART STATION DETECTOR
+        // ==========================================
+        let tf = document.getElementById('townField');
+        if(tf) { tf.addEventListener('change', function() { let cleanInput = cleanString(this.value); if(locationMap[cleanInput]) { document.getElementById('districtBox').value = locationMap[cleanInput]; setStatus("Auto-selected: " + cleanInput); } }); }
+
+        function detectStationSmart() {
+            let rawTown = document.getElementById("townField").value; let cleanInput = cleanString(rawTown);
+            if (!cleanInput) { alert("Type a town first."); return; }
+            if (locationMap[cleanInput]) { document.getElementById("districtBox").value = locationMap[cleanInput]; setStatus("Found: " + rawTown + " -> " + locationMap[cleanInput]); return; }
+            let inputSound = getSoundex(cleanInput);
+            for (let known in locationMap) { if (getSoundex(known) === inputSound && confirm(`Phonetic Match: Did you mean ${known}?`)) { document.getElementById("townField").value = known; document.getElementById("districtBox").value = locationMap[known]; return; } }
+            for (let known in locationMap) { if (calculateLevenshtein(cleanInput, known) <= 2 && confirm(`Fuzzy Match: Did you mean ${known}?`)) { document.getElementById("townField").value = known; document.getElementById("districtBox").value = locationMap[known]; return; } }
+            let station = prompt("Unknown Town. Assign a station to learn it:", districts[0]);
+            if (station && districts.includes(station)) { locationMap[cleanInput] = station; saveConfig(); document.getElementById("districtBox").value = station; setStatus("Learned: " + rawTown + " -> " + station); }
+        }
+
+        // ==========================================
+        // MAIN FORM ACTIONS (Fixed Save Bug)
+        // ==========================================
+        function saveData() {
+            let crewName = document.getElementById("crewNameField").value.trim();
+            let name = document.getElementById("nameField").value.trim();
+            let town = document.getElementById("townField").value.trim();
+            let street = document.getElementById("streetField").value.trim();
+
+            if (!crewName) { alert(isIrish ? "Iontráil d'ainm le do thoil." : "MANDATORY: You must enter your name (Recorded By) before saving."); document.getElementById("crewNameField").focus(); return; }
+            if (!name) { alert(isIrish ? "Iontráil Ainm an chónaitheora le do thoil." : "Resident Name is required."); document.getElementById("nameField").focus(); return; }
+            if (!town && !street) { alert(isIrish ? "Iontráil Baile nó Sráid le do thoil." : "A Town or Street address is required."); document.getElementById("townField").focus(); return; }
+            if (!document.getElementById("consentCheck").checked) { alert(isIrish ? "Ní mór Toiliú GDPR a mharcáil chun an taifead seo a shábháil." : "You must check the Primary GDPR Consent box to save this record."); return; }
+            
+            let selDist = document.getElementById("districtBox").value;
+            
+            // --- SILENT BACKGROUND LEARNING ---
+            let cleanedTown = cleanString(town);
+            if (cleanedTown && !locationMap[cleanedTown]) { 
+                locationMap[cleanedTown] = selDist; 
+                saveConfig(); 
+                logActivity("SYSTEM", "LEARN", `Auto-learned new town: ${town} -> ${selDist}`);
+            }
+            
+            let signatureData = "";
+            let sigSection = document.getElementById("signatureSection");
+            if (sigSection && sigSection.style.display !== "none") { signatureData = canvas.toDataURL(); }
+
+            // EXACT FIX IS HERE: No duplicate fields, perfectly formatted object.
+            let record = { 
+                id: "REC_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+                Date: new Date().toISOString().split('T')[0], 
+                Station: selDist, 
+                Name: name, 
+                House: document.getElementById("houseField").value.trim(), 
+                Phone: document.getElementById("phoneField").value.trim(), 
+                Email: document.getElementById("emailField").value.trim(), 
+                Street: street, 
+                Town: town, 
+                County: currentCounty, 
+                Eircode: document.getElementById("eircodeField").value.trim().toUpperCase(), 
+                FollowUpConsent: document.getElementById("followUpCheck").checked ? "Yes" : "No",
+                Signature: signatureData,
+                Status: "Pending", 
+                Alarms_Installed: "0", 
+                Firefighters: "",      
+                Recorded_By: crewName, 
+                Notes: document.getElementById("notesField").value.trim() 
+            };
+            
+            database.push(record); 
+            logActivity(crewName, "ADD", `Saved new record: ${record.Name}`);
+            saveConfig(); 
+            setStatus("Saved securely to internal storage."); 
+            clearForm();
+        }
+
+        function clearForm() { 
+            let inputsToClear = ["crewNameField", "nameField", "houseField", "phoneField", "emailField", "streetField", "townField", "eircodeField", "notesField"];
+            inputsToClear.forEach(id => { let el = document.getElementById(id); if (el) el.value = ''; });
+            document.getElementById("consentCheck").checked = false;
+            document.getElementById("followUpCheck").checked = false;
+            clearSignature();
+        }
+
+        // ==========================================
+        // PROTECTED DATA ACTIONS (OFFICER AREA)
+        // ==========================================
+        function openSearchModal(activeOfficerName) { 
+            document.getElementById('searchModal').style.display = 'flex'; 
+            document.getElementById('searchDatabaseInput').value = ""; 
+            renderSearchResults(activeOfficerName); 
+        }
+
+        function renderSearchResults(activeOfficerName = "ADMIN") {
+            let txt = cleanString(document.getElementById('searchDatabaseInput').value); 
+            let tbody = document.getElementById("searchResultsBody"); tbody.innerHTML = "";
+            
+            let results = database;
+            if (txt) { results = database.filter(r => cleanString(r.Name).includes(txt) || cleanString(r.Town).includes(txt) || cleanString(r.Eircode).includes(txt)); }
+            results.sort((a,b) => new Date(b.Date) - new Date(a.Date));
+
+            results.forEach(r => {
+                let displayDate = new Date(r.Date).toLocaleDateString();
+                let statusColor = "#888"; 
+                if (r.Status === "Completed") statusColor = "var(--save-green)";
+                if (r.Status === "Not Home") statusColor = "var(--export-orange)";
+                if (r.Status === "Refused Access") statusColor = "var(--admin-red)";
+                if (r.Status === "Follow-up Required") statusColor = "var(--search-blue)";
+
+                let addressStr = r.House ? r.House + ', ' : '';
+                addressStr += r.Town || r.Street;
+
+                tbody.innerHTML += `
+                <tr>
+                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);">${displayDate}</td>
+                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);">${r.Name || "<em>Unknown</em>"}</td>
+                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);">${addressStr}</td>
+                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);">
+                        <span class="badge" style="background-color: ${statusColor};">${r.Status || "Pending"}</span>
+                        <br><span style="font-size: 11px; color: #888;">${r.Alarms_Installed || "0"} Alarms</span>
+                    </td>
+                    <td style="padding:8px; border-bottom: 1px solid var(--table-border);">
+                        <div style="display:flex; gap:5px; justify-content:center;">
+                            <button onclick="openEditModal('${r.id}', '${activeOfficerName}')" style="background:var(--search-blue); color:white; border:none; border-radius:3px; cursor:pointer; padding: 5px 10px; font-weight:bold;">Edit</button>
+                            <button onclick="deleteRecord('${r.id}', '${activeOfficerName}')" style="background:#c83c3c; color:white; border:none; border-radius:3px; cursor:pointer; padding: 5px 10px; font-weight:bold;">Del</button>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+        }
+
+        // ==========================================
+        // OFFICER RECTIFICATION MODAL (Article 16)
+        // ==========================================
+        let currentOfficerDoingEdits = "ADMIN";
+
+        function openEditModal(id, officerName) {
+            let r = database.find(x => x.id === id);
+            if (!r) return;
+            
+            currentEditRecordId = id;
+            currentOfficerDoingEdits = officerName;
+            
+            let editName = document.getElementById("editNameField");
+            if (editName) editName.value = r.Name || "";
+            
+            let editPhone = document.getElementById("editPhoneField");
+            if (editPhone) editPhone.value = r.Phone || "";
+
+            let editEmail = document.getElementById("editEmailField");
+            if (editEmail) editEmail.value = r.Email || "";
+
+            let editHouse = document.getElementById("editHouseField");
+            if (editHouse) editHouse.value = r.House || "";
+
+            let editStreet = document.getElementById("editStreetField");
+            if (editStreet) editStreet.value = r.Street || "";
+
+            let editTown = document.getElementById("editTownField");
+            if (editTown) editTown.value = r.Town || "";
+            
+            let editEircode = document.getElementById("editEircodeField");
+            if (editEircode) editEircode.value = r.Eircode || "";
+
+            let editStatus = document.getElementById("editStatusBox");
+            if (editStatus) editStatus.value = r.Status || "Pending";
+
+            let editDate = document.getElementById("editDateField");
+            if (editDate) editDate.value = r.Date || new Date().toISOString().split('T')[0];
+            
+            let editAlarms = document.getElementById("editAlarmsField");
+            if (editAlarms) editAlarms.value = r.Alarms_Installed || "0";
+            
+            let editFirefighters = document.getElementById("editFirefightersField");
+            if (editFirefighters) editFirefighters.value = r.Firefighters || "";
+
+            let editRecordedBy = document.getElementById("editRecordedByField");
+            if (editRecordedBy) editRecordedBy.value = r.Recorded_By || "Unknown";
+            
+            let modal = document.getElementById("editOutcomeModal");
+            if (modal) modal.style.display = "flex";
+        }
+
+        function saveEditOutcomes() {
+            let targetId = (typeof currentEditRecordId !== 'undefined') ? currentEditRecordId : currentEditId;
+            let record = database.find(r => r.id === targetId);
+            
+            if (!record) {
+                alert("Error: Could not find the record to save.");
+                return;
+            }
+
+            let editName = document.getElementById("editNameField");
+            if (editName) record.Name = editName.value.trim();
+
+            let editPhone = document.getElementById("editPhoneField");
+            if (editPhone) record.Phone = editPhone.value.trim();
+
+            let editEmail = document.getElementById("editEmailField");
+            if (editEmail) record.Email = editEmail.value.trim();
+
+            let editHouse = document.getElementById("editHouseField");
+            if (editHouse) record.House = editHouse.value.trim();
+
+            let editStreet = document.getElementById("editStreetField");
+            if (editStreet) record.Street = editStreet.value.trim();
+
+            let editTown = document.getElementById("editTownField");
+            if (editTown) record.Town = editTown.value.trim();
+
+            let editEircode = document.getElementById("editEircodeField");
+            if (editEircode) record.Eircode = editEircode.value.trim().toUpperCase();
+
+            let editDate = document.getElementById("editDateField");
+            if (editDate && editDate.value) record.Date = editDate.value;
+
+            let editStatus = document.getElementById("editStatusBox");
+            if (editStatus) record.Status = editStatus.value;
+
+            let editAlarms = document.getElementById("editAlarmsField");
+            if (editAlarms) record.Alarms_Installed = editAlarms.value || "0";
+
+            let editFirefighters = document.getElementById("editFirefightersField");
+            if (editFirefighters) record.Firefighters = editFirefighters.value.trim();
+
+            let officer = (typeof currentOfficerDoingEdits !== 'undefined') ? currentOfficerDoingEdits : "ADMIN";
+
+            logActivity(officer, "UPDATE", `Updated record for: ${record.Name}`);
+            saveConfig(); 
+            renderSearchResults(officer);
+            document.getElementById('editOutcomeModal').style.display = 'none';
+        }
+
+        function deleteRecord(recordId, officerName) {
+            if (confirm("Are you sure you want to permanently delete this record? This cannot be undone.")) {
+                let rec = database.find(r => r.id === recordId);
+                if (rec) {
+                    database = database.filter(r => r.id !== recordId);
+                    logActivity(officerName, "DELETE", `Deleted record for: ${rec.Name || rec.Street}`);
+                    saveConfig(); 
+                    renderSearchResults(officerName);
+                }
+            }
+        }
+
+        // ==========================================
+        // EXPORTS & AUDIT LOGS (Article 30)
+        // ==========================================
+        function downloadExcel(officerName) {
+            if (database.length === 0 && activityLogs.length === 0) { 
+                alert("No data available to export."); 
+                return; 
+            }
+            
+            let wb = XLSX.utils.book_new();
+            
+            if (database.length > 0) {
+                let uniqueStations = [...new Set(database.map(item => item.Station))];
+
+                uniqueStations.forEach(stationName => {
+                    let stationRecords = database.filter(r => r.Station === stationName);
+                    
+                    if (stationRecords.length > 0) {
+                        let cleanData = stationRecords.map(({id, Signature, ...rest}) => rest);
+                        let ws = XLSX.utils.json_to_sheet(cleanData); 
+                        XLSX.utils.book_append_sheet(wb, ws, stationName); 
+                    }
+                });
+            }
+
+            if (activityLogs.length > 0) {
+                let parsedLogs = activityLogs.map(log => {
+                    let matchNew = log.match(/\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)/);
+                    if (matchNew) return { Timestamp: matchNew[1], User: matchNew[2], EventType: matchNew[3], Details: matchNew[4] };
+                    
+                    let matchOld = log.match(/\[(.*?)\] \[(.*?)\] (.*)/);
+                    if (matchOld) return { Timestamp: matchOld[1], User: matchOld[2], EventType: "SYS", Details: matchOld[3] };
+                    
+                    return { Details: log };
+                });
+                
+                let wsLogs = XLSX.utils.json_to_sheet(parsedLogs);
+                XLSX.utils.book_append_sheet(wb, wsLogs, "Audit Logs");
+            }
+
+            let fallbackOfficer = (typeof officerName === 'string') ? officerName : "ADMIN";
+            XLSX.writeFile(wb, `${currentCounty}_Fire_Visits.xlsx`); 
+            logActivity(fallbackOfficer, "EXPORT", "Downloaded Excel with separated Station sheets");
+        }
+
+        function exportForGoogleMaps(officerName) { 
+            if (database.length === 0) { alert("No data to map."); return; }
+            let csvContent = "data:text/csv;charset=utf-8,Name,Description,Address\n";
+            database.forEach(r => { 
+                let address = r.Eircode.replace(/,/g, " ") || `${r.Street} ${r.Town}`.replace(/,/g, " "); 
+                csvContent += `${r.Name.replace(/,/g, " ")},Status: ${r.Status} - Alarms: ${r.Alarms_Installed},${address}\n`; 
+            });
+            let link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "map_upload.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); 
+            logActivity(officerName, "EXPORT", "Exported Map CSV"); setStatus("CSV file downloaded.");
+        }
+
+        function openInMaps() { 
+            let eircode = document.getElementById("eircodeField").value.trim();
+            let q = eircode ? eircode : document.getElementById("streetField").value + " " + document.getElementById("townField").value + " Co " + currentCounty;
+            if (!q.trim() || q.trim() === "Co " + currentCounty) return; window.open("https://maps.google.com/?q=" + encodeURIComponent(q), "_blank");
+        }
+        
+        // ==========================================
+        // TOWNLAND MEMORY MANAGER
+        // ==========================================
+        function viewMemory(officerName) { logActivity(officerName, "AUTH", "Opened Townland Memory Manager"); document.getElementById('memoryModal').style.display = 'flex'; renderMemoryTable(); }
+        function renderMemoryTable() { 
+            let tbody = document.getElementById("memoryTableBody"); tbody.innerHTML = "";
+            Object.keys(locationMap).sort().forEach(town => { tbody.innerHTML += `<tr><td style="padding:8px; border-bottom: 1px solid var(--table-border);">${town.charAt(0).toUpperCase() + town.slice(1)}</td><td style="padding:8px; border-bottom: 1px solid var(--table-border);">${locationMap[town]}</td><td style="padding:8px; text-align:center; border-bottom: 1px solid var(--table-border);"><button onclick="deleteTown('${town}')" style="background:#c83c3c; color:white; border:none; border-radius:3px; cursor:pointer; padding: 4px 8px;">X</button></td></tr>`; });
+        }
+        function addTownManually() { let town = document.getElementById("newTownInput").value.trim(); let station = document.getElementById("newTownStation").value; if (town) { locationMap[cleanString(town)] = station; logActivity("ADMIN", "ADD", `Added Town to memory: ${town}`); saveConfig(); document.getElementById("newTownInput").value = ""; renderMemoryTable(); } }
+        function deleteTown(t) { delete locationMap[t]; logActivity("ADMIN", "DELETE", `Removed Town from memory: ${t}`); saveConfig(); renderMemoryTable(); }
+        
+        let csvInp = document.getElementById('csvFileInput');
+        if(csvInp) { csvInp.addEventListener('change', function(e) { let file = e.target.files[0]; if (!file) return; let reader = new FileReader(); reader.onload = function(event) { let count = 0; event.target.result.split('\n').forEach(line => { let parts = line.split(','); if (parts.length >= 2) { let town = cleanString(parts[0]); let station = parts[1].trim(); if (town && districts.includes(station)) { locationMap[town] = station; count++; } } }); logActivity("ADMIN", "IMPORT", `Imported ${count} townlands via CSV`); saveConfig(); renderMemoryTable(); alert(`Imported ${count} townlands!`); e.target.value = ''; }; reader.readAsText(file); }); }
+
+        // ==========================================
+        // PROGRESSIVE WEB APP (PWA) SERVICE WORKER
+        // ==========================================
+        if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW fail:', err)); }); }
+    </script>
+</body>
+</html>
