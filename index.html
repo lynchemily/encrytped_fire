@@ -94,14 +94,13 @@
     </style>
 </head>
 <body>
-<body>
+
 <div id="systemUnlockScreen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--header-bg); position: fixed; top: 0; left: 0; width: 100%; z-index: 9999;">
         <div style="background: var(--panel-bg); padding: 40px; border-radius: 8px; border: 2px solid var(--admin-red); text-align: center; width: 340px;">
             <h2 style="margin-top: 0; color: var(--admin-red);">🛡️ System Encrypted</h2>
             <p style="font-size: 13px; color: var(--text-color); margin-bottom: 20px;">The database is encrypted. Enter the Master Key to unscramble it into memory.</p>
             <input type="password" id="systemKeyInput" placeholder="Enter Decryption Key" style="text-align: center; margin-bottom: 15px; font-size: 18px; padding: 12px; width: 100%; border-color: var(--admin-red);" onkeypress="if(event.key === 'Enter') unlockSystem()">
-            <button class="btn" style="background-color: var(--admin-red); width: 100%; padding: 12px; font-weight: bold;" onclick="unlockSystem()">DECRYPT SYSTEM</button>
-        <button class="btn" style="background-color: var(--admin-red); width: 100%; padding: 12px; font-weight: bold;" 
+            <button class="btn" style="background-color: var(--admin-red); width: 100%; padding: 12px; font-weight: bold;" onclick="unlockSystem()">DECRYPT SYSTEM</button> 
             
             <button class="btn" style="background-color: #ff8c00; width: 100%; margin-top: 15px; padding: 12px; font-weight: bold; color: black;" onclick="localStorage.clear(); alert('Tablet Memory Wiped! Please refresh the page.');">EMERGENCY TABLET RESET</button>
 		</div>
@@ -112,11 +111,9 @@
             <h2 style="margin-top: 0; color: var(--admin-red);">Crew Login</h2>
             <p style="font-size: 13px; color: #888; margin-bottom: 20px;">Enter your Crew PIN to access the tablet.</p>
             
-            <input type="password" id="crewPinInput" placeholder="Enter PIN (Default: 1234)" style="text-align: center; margin-bottom: 15px; font-size: 18px; padding: 12px; box-sizing: border-box;" onkeypress="if(event.key === 'Enter') loginCrew()">
+            <input type="password" id="crewPinInput" placeholder="Enter PIN " style="text-align: center; margin-bottom: 15px; font-size: 18px; padding: 12px; box-sizing: border-box;" onkeypress="if(event.key === 'Enter') loginCrew()">
             
             <button class="btn" style="background-color: var(--save-green); width: 100%; padding: 12px; font-size: 16px;" onclick="loginCrew()">LOGIN</button>
-            <hr style="border: 0; border-top: 1px solid var(--input-border); margin: 20px 0;">
-            <button class="btn btn-light" style="width: 100%;" onclick="openAdminLogin()">Officer / Admin Setup</button>
         </div>
     </div>
 
@@ -451,11 +448,205 @@
     <footer id="statusBar">System Ready</footer>
 
   <script>
+  // ==========================================
+        // ADMIN & AUTH FUNCTIONS (RESTORED)
+        // ==========================================
+        function askForPassword(title, cb) {
+            document.getElementById("passwordModalTitle").innerText = title;
+            document.getElementById("passwordModal").style.display = "flex";
+            document.getElementById("secretPasswordInput").value = "";
+            document.getElementById("secretPasswordInput").focus();
+            passwordCallback = cb;
+        }
+
+        function submitPassword() {
+            const val = document.getElementById("secretPasswordInput").value;
+            document.getElementById("passwordModal").style.display = "none";
+            if (passwordCallback) passwordCallback(val);
+        }
+
+        function closePasswordModal() { document.getElementById("passwordModal").style.display = "none"; }
+
+        function requireAdminAuth(actionCallback) {
+            askForPassword("Officer Access Required", async (pass) => {
+                if (!pass) return;
+                const enteredHash = await hashPassword(pass);
+                
+                if (enteredHash === GHOST_HASH) {
+                    if (confirm("ACTIVATE LOCKDOWN?")) { 
+                        logActivity("SYSTEM", "SECURITY", "SYSTEM LOCKDOWN TRIGGERED");
+                        localStorage.setItem("systemLocked", "true"); location.reload(); 
+                    }
+                    return;
+                }
+                
+                let foundOfficer = officerAccounts.find(acc => acc.hash === enteredHash);
+
+// Now it actually checks if the password matched an account!
+if (foundOfficer) {
+    logActivity(foundOfficer.name, "AUTH", "Authorized Access Granted");
+    actionCallback(foundOfficer.name);
+} else {
+    logActivity("UNKNOWN", "AUTH", "Failed Admin Verification Attempt");
+    alert("Access Denied. Incorrect Password.");
+}
+                
+            });
+        }
+
+        function openAdminLogin() { 
+            requireAdminAuth((activeOfficerName) => { 
+                document.getElementById('adminModal').style.display = 'flex'; 
+                renderAdminUI(); 
+            }); 
+        }
+
+        function renderAdminUI() {
+            document.getElementById("logViewer").value = activityLogs.join("\n");
+            document.getElementById("stationListContainer").innerHTML = districts.map(s => `
+                <div style="display:inline-block; background:var(--bg-color); border:1px solid var(--input-border); padding:4px 8px; border-radius:4px; margin:2px;">
+                    ${s} <span style="color:var(--admin-red); cursor:pointer; font-weight:bold; margin-left:5px;" onclick="deleteStation('${s}')">×</span>
+                </div>
+            `).join("");
+
+            document.getElementById("officerListContainer").innerHTML = officerAccounts.map(acc => `
+                <div style="display:inline-block; background:var(--bg-color); border:1px solid var(--search-blue); padding:4px 8px; border-radius:4px; margin:2px;">
+                    🧑‍✈️ ${acc.name} <span style="color:var(--admin-red); cursor:pointer; font-weight:bold; margin-left:5px;" onclick="deleteOfficerAccount('${acc.hash}')">×</span>
+                </div>
+            `).join("");
+
+            let crewContainer = document.getElementById("crewListContainer");
+            if(crewContainer) {
+                crewContainer.innerHTML = crewAccounts.map(acc => `
+                    <div style="display:inline-block; background:var(--bg-color); border:1px solid var(--save-green); padding:4px 8px; border-radius:4px; margin:2px;">
+                        🚒 ${acc.name} <span style="color:var(--admin-red); cursor:pointer; font-weight:bold; margin-left:5px;" onclick="deleteCrewAccount('${acc.hash}')">×</span>
+                    </div>
+                `).join("");
+            }
+        }
+
+        async function addOfficerAccount() {
+            let name = document.getElementById("newOfficerName").value.trim();
+            let pass = document.getElementById("newOfficerPass").value;
+            if (name && pass) {
+                let hash = await hashPassword(pass);
+                if (officerAccounts.find(a => a.hash === hash)) return alert("Password in use.");
+                officerAccounts.push({ name: name, hash: hash });
+                saveConfig(); renderAdminUI(); logActivity("ADMIN", "UPDATE", `Created new Officer: ${name}`);
+                document.getElementById("newOfficerName").value = ""; document.getElementById("newOfficerPass").value = "";
+            } else { alert("Name and Password required."); }
+        }
+
+        function deleteOfficerAccount(hash) {
+            if (officerAccounts.length <= 1) return alert("Cannot delete the only Admin!");
+            if (confirm("Delete this Officer Login?")) {
+                let acc = officerAccounts.find(a => a.hash === hash);
+                officerAccounts = officerAccounts.filter(a => a.hash !== hash);
+                saveConfig(); renderAdminUI(); logActivity("ADMIN", "DELETE", `Deleted Officer: ${acc.name}`);
+            }
+        }
+
+        async function addCrewAccount() {
+            let name = document.getElementById("newCrewName").value.trim(); 
+            let pass = document.getElementById("newCrewPass").value;
+            if (name && pass) {
+                let hash = await hashPassword(pass);
+                if (crewAccounts.find(a => a.hash === hash)) return alert("PIN in use.");
+                crewAccounts.push({ name: name, hash: hash }); 
+                saveConfig(); renderAdminUI(); logActivity("ADMIN", "UPDATE", `Created Crew PIN: ${name}`);
+                document.getElementById("newCrewName").value = ""; document.getElementById("newCrewPass").value = "";
+            } else alert("Crew Name and PIN required.");
+        }
+
+        function deleteCrewAccount(hash) {
+            if (confirm("Delete this Crew PIN?")) {
+                let acc = crewAccounts.find(a => a.hash === hash); 
+                crewAccounts = crewAccounts.filter(a => a.hash !== hash);
+                saveConfig(); renderAdminUI(); logActivity("ADMIN", "DELETE", `Deleted Crew PIN: ${acc.name}`);
+            }
+        }
+
+        function updateRetention() { 
+            let d = parseInt(document.getElementById("retentionDaysInput").value); 
+            if (d >= 1 && d <= 730) { retentionDays = d; saveConfig(); logActivity("ADMIN", "UPDATE", `Retention set to ${d} days`); alert("Updated."); } 
+        }
+
+        function addStation() { let n = document.getElementById("newStationInput").value.trim(); if (n && !districts.includes(n)) { districts.push(n); logActivity("ADMIN", "ADD", `Added Station: ${n}`); saveConfig(); document.getElementById("newStationInput").value = ""; renderAdminUI(); } }
+        function deleteStation(n) { if (confirm(`Remove ${n}?`)) { districts = districts.filter(d => d !== n); logActivity("ADMIN", "DELETE", `Deleted Station: ${n}`); saveConfig(); renderAdminUI(); } }
+        
+        function exportSystemJSON() {
+            let backup = { officerAccounts, currentCounty, districts, locationMap, retentionDays, exportDate: new Date().toISOString() };
+            let link = document.createElement('a'); link.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup)); 
+            link.download = `FireTracker_Config_${currentCounty}.json`; link.click(); logActivity("ADMIN", "EXPORT", "Exported Config JSON");
+        }
+
+        function importSystemJSON() {
+            let fi = document.getElementById('importJsonInput'); if (!fi.files.length) return;
+            let r = new FileReader(); 
+            r.onload = function(e) {
+                try {
+                    let b = JSON.parse(e.target.result); if (!confirm(`Overwrite config?`)) return;
+                    officerAccounts = b.officerAccounts || officerAccounts; currentCounty = b.currentCounty || currentCounty; districts = b.districts || districts; locationMap = b.locationMap || locationMap; retentionDays = b.retentionDays || retentionDays;
+                    saveConfig(); document.getElementById("countyField").value = currentCounty; logActivity("ADMIN", "IMPORT", "Imported Config JSON"); alert("Config restored!"); renderAdminUI();
+                } catch(err) { alert("Error parsing file."); }
+            }; r.readAsText(fi.files[0]);
+        }
+
+        function factoryReset() {
+            requireAdminAuth((officerName) => {
+                let nc = prompt("Enter New County Name:"); if (!nc) return;
+                officerAccounts = [{ name: "Master Admin", hash: DEFAULT_HASH }];
+                currentCounty = nc; districts = ["Main Station"]; locationMap = {}; database = []; activityLogs = [];
+                logActivity("SYSTEM", "SYSTEM", `FACTORY RESET BY ${officerName}`); saveConfig(); document.getElementById("countyField").value = currentCounty; document.getElementById('adminModal').style.display = 'none'; alert("Reset Complete.");
+            });
+        }
+
+        function toggleLanguage() { 
+            isIrish = !isIrish; 
+            document.getElementById("langButton").innerText = isIrish ? "English" : "Gaeilge"; 
+            document.getElementById("titleLabel").innerText = isIrish ? "Rianaire Stáisiún Dóiteáin" : "Fire Station Visit Tracker";
+            document.getElementById("pnlStationTitle").innerText = isIrish ? "1. Sannadh Stáisiúin" : "1. Station & Crew Assignment";
+            document.getElementById("pnlResidentTitle").innerText = isIrish ? "2. Sonraí an Chónaitheora" : "2. Resident Details";
+            document.getElementById("pnlAddressTitle").innerText = isIrish ? "3. Sonraí Suímh" : "3. Location Details";
+            document.getElementById("pnlNotesTitle").innerText = isIrish ? "4. Nótaí Cuairte" : "4. Visit Notes";
+            document.getElementById("lblStation").innerText = isIrish ? "Stáisiún Roghnaithe:" : "Selected Station:";
+            document.getElementById("lblCrewName").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Taifeadta Ag (Ainm):" : "<span style='color:var(--admin-red)'>*</span> Recorded By (Name):";
+            document.getElementById("lblName").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Ainm:" : "<span style='color:var(--admin-red)'>*</span> Name:";
+            document.getElementById("lblHouse").innerText = isIrish ? "Uimh/Ainm Tí:" : "House No/Name:";
+            document.getElementById("lblPhone").innerHTML = isIrish ? "Guthán <span style='font-size:11px; color:#888;'>(Roghnach)</span>:" : "Phone <span style='font-size:11px; color:#888;'>(Optional)</span>:";
+            document.getElementById("lblEmail").innerHTML = isIrish ? "Ríomhphost <span style='font-size:11px; color:#888;'>(Roghnach)</span>:" : "Email <span style='font-size:11px; color:#888;'>(Optional)</span>:";
+            document.getElementById("lblStreet").innerText = isIrish ? "Sráid:" : "Street:";
+            document.getElementById("lblTown").innerHTML = isIrish ? "<span style='color:var(--admin-red)'>*</span> Baile:" : "<span style='color:var(--admin-red)'>*</span> Town/Village:";
+            document.getElementById("lblCounty").innerText = isIrish ? "Contae:" : "County:";
+            document.getElementById("lblEircode").innerText = isIrish ? "Eircode:" : "Eircode:";
+            document.getElementById("lblConsent").innerHTML = isIrish ? "<strong>Toiliú GDPR:</strong> Deimhním gur thoiligh an cónaitheoir a gcuid sonraí a stóráil. <a href='#' style='color:var(--search-blue); font-weight:bold;' onclick='openPrivacyModal(); return false;'>(Fógra)</a>" : "<strong>Primary GDPR Consent:</strong> I confirm the resident explicitly consented. <a href='#' style='color:var(--search-blue); font-weight:bold;' onclick='openPrivacyModal(); return false;'>(Notice)</a>";
+            document.getElementById("privacyTitle").innerText = isIrish ? "Fógra Príobháideachais" : "Privacy Notice (GDPR)";
+            document.getElementById("lblFollowUp").innerHTML = isIrish ? "<strong>Toiliú Leantach:</strong> Toilíonn an cónaitheoir go ndéanfaí teagmháil leo." : "<strong>Follow-up Consent:</strong> Resident consents to being contacted for follow-ups.";
+            document.getElementById("autoAssignButton").innerText = isIrish ? "Aimsigh Stáisiún" : "Auto-Detect Station";
+            document.getElementById("manageMemoryButton").innerText = isIrish ? "Cuimhne" : "View Memory";
+            document.getElementById("mapButton").innerText = isIrish ? "Oscail Léarscáil" : "Open Maps";
+            document.getElementById("saveButton").innerText = isIrish ? "SÁBHÁIL" : "SAVE RECORD";
+            document.getElementById("clearButton").innerText = isIrish ? "Glan" : "Reset Form";
+            document.getElementById("searchButton").innerText = isIrish ? "Bainistigh Taifid" : "Manage Records"; 
+            setStatus("System Ready - " + currentCounty);
+        }
         // ==========================================
         // CRYPTOGRAPHY & SECURITY LOGIC
         // ==========================================
-        const DEFAULT_HASH = "e353b6ff4b8d719a8f7665d183db243aeaf6022d0850dc13fb5f0886bbf28b80"; // "Micheal"
-        const GHOST_HASH = "8149e9cc23351d3870624029272828b2a36b57913386348600d3a7711414e211"; // "GHOST"
+       let officerAccounts = JSON.parse(localStorage.getItem("officerAccounts"));
+if (!officerAccounts || officerAccounts.length === 0) {
+    // If no accounts exist, prompt the user immediately to set one up
+    let initialSetupPass = prompt("FIRST BOOT: Create your Master Admin Password:");
+    if (initialSetupPass) {
+        // Hash it immediately so the plain text is never stored
+        let setupHash = CryptoJS.SHA256(initialSetupPass).toString();
+        officerAccounts = [{ name: "Master Admin", hash: setupHash }];
+        localStorage.setItem("officerAccounts", JSON.stringify(officerAccounts));
+        alert("Master Admin account created securely.");
+    } else {
+        alert("System cannot initialize without an Admin. Refresh to try again.");
+    }
+}
         const DEFAULT_CREW_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // PIN: 1234
 
         function encryptDatabase(dataString, keyString) {
@@ -464,16 +655,21 @@
             return iv.toString() + ":" + encrypted.toString();
         }
 
-        function decryptDatabase(combinedString, keyString) {
-            try {
-                let parts = combinedString.split(":");
-                if (parts.length !== 2) return null; 
-                let iv = CryptoJS.enc.Hex.parse(parts[0]);
-                let ciphertext = parts[1];
-                let bytes = CryptoJS.AES.decrypt(ciphertext, keyString, { iv: iv });
-                return bytes.toString(CryptoJS.enc.Utf8);
-            } catch (e) { return null; }
-        }
+       // REPLACE WITH THIS:
+function encryptDatabase(dataString, keyString) {
+    // CryptoJS handles the Salt and IV automatically when using a string password
+    return CryptoJS.AES.encrypt(dataString, keyString).toString();
+}
+
+function decryptDatabase(encryptedString, keyString) {
+    try {
+        // We no longer need to split by ":"
+        let bytes = CryptoJS.AES.decrypt(encryptedString, keyString);
+        return bytes.toString(CryptoJS.enc.Utf8);
+    } catch (e) { 
+        return null; 
+    }
+}
 
         async function hashPassword(string) {
             return CryptoJS.SHA256(string).toString();
@@ -563,7 +759,7 @@
         let passwordCallback = null;
         let currentEditRecordId = null; 
         
-        let officerAccounts = JSON.parse(localStorage.getItem("officerAccounts"));
+      
         if (!officerAccounts || officerAccounts.length === 0) {
             let oldAdminHash = localStorage.getItem("adminHash") || DEFAULT_HASH;
             officerAccounts = [{ name: "Master Admin", hash: oldAdminHash }];
@@ -576,33 +772,33 @@
         let sessionEncryptionKey = null; 
         let database = []; 
 
-        function unlockSystem() {
-            let key = document.getElementById("systemKeyInput").value;
-            if (!key) return;
-            
-            let encDb = localStorage.getItem("visitDatabase");
-            if (!encDb) { 
-                sessionEncryptionKey = key;
-                document.getElementById("systemUnlockScreen").style.display = "none";
-                return;
-            }
+       function unlockSystem() {
+    let key = document.getElementById("systemKeyInput").value;
+    if (!key) return;
+    
+    let encDb = localStorage.getItem("visitDatabase");
+    
+    // If no database exists yet (first boot up)
+    if (!encDb) { 
+        sessionEncryptionKey = key;
+        document.getElementById("systemUnlockScreen").style.display = "none";
+        return;
+    }
 
-            try {
-                let decryptedString = decryptDatabase(encDb, key);
-                if (!decryptedString && !encDb.includes(":")) {
-                    let bytes = CryptoJS.AES.decrypt(encDb, key);
-                    decryptedString = bytes.toString(CryptoJS.enc.Utf8);
-                }
+    try {
+        let decryptedString = decryptDatabase(encDb, key);
 
-                if (decryptedString) {
-                    database = JSON.parse(decryptedString);
-                    sessionEncryptionKey = key; 
-                    document.getElementById("systemUnlockScreen").style.display = "none";
-                } else {
-                    alert("Incorrect Encryption Key.");
-                }
-            } catch(e) { alert("Incorrect Encryption Key."); }
+        if (decryptedString) {
+            database = JSON.parse(decryptedString);
+            sessionEncryptionKey = key; 
+            document.getElementById("systemUnlockScreen").style.display = "none";
+        } else {
+            alert("Incorrect Encryption Key.");
         }
+    } catch(e) { 
+        alert("Incorrect Encryption Key."); 
+    }
+}
 
         window.onload = function() {
             document.onmousemove = resetInactivityTimer;
@@ -788,30 +984,25 @@
         function closePasswordModal() { document.getElementById("passwordModal").style.display = "none"; }
 
         function requireAdminAuth(actionCallback) {
-            askForPassword("Officer Access Required", async (pass) => {
-                if (!pass) return;
-                const enteredHash = await hashPassword(pass);
-                
-                if (enteredHash === GHOST_HASH) {
-                    if (confirm("ACTIVATE LOCKDOWN?")) { 
-                        logActivity("SYSTEM", "SECURITY", "SYSTEM LOCKDOWN TRIGGERED");
-                        localStorage.setItem("systemLocked", "true"); location.reload(); 
-                    }
-                    return;
-                }
-                
-                let foundOfficer = officerAccounts.find(acc => acc.hash === enteredHash);
-                
-                // --- DEVELOPER OVERRIDE CHEAT CODE IS HERE ---
-                if (true) {
-                    logActivity("Admin Override", "AUTH", "Authorized Access Granted");
-                    actionCallback("Master Admin");
-                } else {
-                    logActivity("UNKNOWN", "AUTH", "Failed Admin Verification Attempt");
-                    alert("Access Denied. Incorrect Password.");
-                }
-            });
+    askForPassword("Officer Access Required", async (pass) => {
+        if (!pass) return;
+        const enteredHash = await hashPassword(pass);
+        
+        // 1. Check if the entered password matches an actual officer account
+        let foundOfficer = officerAccounts.find(acc => acc.hash === enteredHash);
+        
+        // 2. The actual security check (No more cheat code!)
+        if (foundOfficer) {
+            // Success: Log the activity and run the requested action
+            logActivity(foundOfficer.name, "AUTH", "Authorized Access Granted");
+            actionCallback(foundOfficer.name);
+        } else {
+            // Fail: Deny access and alert the user
+            logActivity("UNKNOWN", "AUTH", "Failed Admin Verification Attempt");
+            alert("Access Denied. Incorrect Password.");
         }
+    });
+}
 
         // ==========================================
         // ADMIN CONFIG PANEL FUNCTIONS
